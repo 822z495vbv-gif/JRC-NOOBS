@@ -9,60 +9,220 @@ const {
   ButtonBuilder,
   ButtonStyle,
   PermissionFlagsBits,
-  ActivityType
+  ActivityType,
+  AuditLogEvent
 } = require('discord.js');
 
-const GUILD_ID = 'YOUR_SERVER_ID_HERE'; // Replace with Guild ID for instant slash sync
+const GUILD_ID = 'YOUR_SERVER_ID_HERE'; // Replace with Guild ID for instant slash command synchronization
 
-// --- COMMAND DEFINITIONS (30+ COMMANDS) ---
+// --- COMMAND DEFINITIONS WITH DESCRIPTIONS ---
 const commands = [
-  // 1. SYSTEM
-  new SlashCommandBuilder().setName('ping').setDescription('Check precise websocket latency'),
-  new SlashCommandBuilder().setName('userinfo').setDescription('View telemetry').addUserOption(opt => opt.setName('target').setDescription('Target user')),
-  new SlashCommandBuilder().setName('serverinfo').setDescription('View server telemetry'),
-  new SlashCommandBuilder().setName('avatar').setDescription('Fetch avatar').addUserOption(opt => opt.setName('target').setDescription('Target user')),
-  new SlashCommandBuilder().setName('banner').setDescription('Fetch target user banner').addUserOption(opt => opt.setName('target').setDescription('Target user')),
-  new SlashCommandBuilder().setName('botinfo').setDescription('View bot runtime telemetry'),
+  // ================= ADMIN & SECURITY COMMANDS =================
+  new SlashCommandBuilder()
+    .setName('antinuke')
+    .setDescription('Configure or view Anti-Nuke auto-defense settings')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    
+  new SlashCommandBuilder()
+    .setName('lockdown')
+    .setDescription('Instantly locks down all text channels in the server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // 2. MODERATION & SECURITY
-  new SlashCommandBuilder().setName('clear').setDescription('Purge chat history').setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages).addIntegerOption(opt => opt.setName('amount').setDescription('Number of messages (1-100)').setRequired(true)),
-  new SlashCommandBuilder().setName('warn').setDescription('Issue formal user infraction').setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Infraction reason').setRequired(true)),
-  new SlashCommandBuilder().setName('timeout').setDescription('Timeout a member').setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)).addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true)),
-  new SlashCommandBuilder().setName('untimeout').setDescription('Remove timeout from a member').setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers).addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)),
-  new SlashCommandBuilder().setName('slowmode').setDescription('Enforce channel rate limits').setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels).addIntegerOption(opt => opt.setName('seconds').setDescription('Delay in seconds (0 = off)').setRequired(true)),
-  new SlashCommandBuilder().setName('lock').setDescription('Lockdown current channel').setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
-  new SlashCommandBuilder().setName('unlock').setDescription('Lift channel lockdown').setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
-  new SlashCommandBuilder().setName('kick').setDescription('Remove user from server').setDefaultMemberPermissions(PermissionFlagsBits.KickMembers).addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Reason')),
-  new SlashCommandBuilder().setName('ban').setDescription('Permanently ban user').setDefaultMemberPermissions(PermissionFlagsBits.BanMembers).addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Reason')),
-  new SlashCommandBuilder().setName('unban').setDescription('Unban a user by ID').setDefaultMemberPermissions(PermissionFlagsBits.BanMembers).addStringOption(opt => opt.setName('userid').setDescription('Target user ID').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('unlockall')
+    .setDescription('Lifts the server-wide lockdown on all text channels')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
-  // 3. ECONOMY & GAMBLING
-  new SlashCommandBuilder().setName('balance').setDescription('Check cash and bank balance').addUserOption(opt => opt.setName('target').setDescription('User to view')),
-  new SlashCommandBuilder().setName('daily').setDescription('Claim your daily cash reward'),
-  new SlashCommandBuilder().setName('work').setDescription('Work to earn cash'),
-  new SlashCommandBuilder().setName('deposit').setDescription('Deposit cash into bank').addIntegerOption(opt => opt.setName('amount').setDescription('Amount to deposit').setRequired(true)),
-  new SlashCommandBuilder().setName('withdraw').setDescription('Withdraw cash from bank').addIntegerOption(opt => opt.setName('amount').setDescription('Amount to withdraw').setRequired(true)),
-  new SlashCommandBuilder().setName('pay').setDescription('Transfer cash to another user').addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)).addIntegerOption(opt => opt.setName('amount').setDescription('Amount').setRequired(true)),
-  new SlashCommandBuilder().setName('slots').setDescription('Spin the slot machine').addIntegerOption(opt => opt.setName('bet').setDescription('Wager').setRequired(true)),
-  new SlashCommandBuilder().setName('blackjack').setDescription('Play a hand of blackjack').addIntegerOption(opt => opt.setName('bet').setDescription('Wager').setRequired(true)),
+  new SlashCommandBuilder()
+    .setName('clear')
+    .setDescription('Bulk deletes a specified number of recent messages')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .addIntegerOption(opt => opt.setName('amount').setDescription('Number of messages to purge (1-100)').setRequired(true)),
 
-  // 4. LEVELING & PROGRESSION
-  new SlashCommandBuilder().setName('rank').setDescription('View level and XP').addUserOption(opt => opt.setName('target').setDescription('User to view')),
-  new SlashCommandBuilder().setName('leaderboard').setDescription('View level & economy leaderboards'),
+  new SlashCommandBuilder()
+    .setName('warn')
+    .setDescription('Issues a formal disciplinary warning to a server member')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(opt => opt.setName('target').setDescription('Member to receive warning').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for the warning').setRequired(true)),
 
-  // 5. SOCIAL & FUN
-  new SlashCommandBuilder().setName('ship').setDescription('Calculate user romantic compatibility').addUserOption(opt => opt.setName('user1').setDescription('First user').setRequired(true)).addUserOption(opt => opt.setName('user2').setDescription('Second user')),
-  new SlashCommandBuilder().setName('coinflip').setDescription('Flip a coin'),
-  new SlashCommandBuilder().setName('dice').setDescription('Roll a custom die').addIntegerOption(opt => opt.setName('sides').setDescription('Number of sides (Default: 6)')),
-  new SlashCommandBuilder().setName('8ball').setDescription('Ask the oracle').addStringOption(opt => opt.setName('question').setDescription('Question').setRequired(true)),
-  new SlashCommandBuilder().setName('pp').setDescription('Check size metric').addUserOption(opt => opt.setName('target').setDescription('User')),
-  new SlashCommandBuilder().setName('marry').setDescription('Propose marriage').addUserOption(opt => opt.setName('partner').setDescription('Partner').setRequired(true)),
-  new SlashCommandBuilder().setName('meme').setDescription('Fetch a random meme'),
+  new SlashCommandBuilder()
+    .setName('timeout')
+    .setDescription('Mutes and restricts a member from chatting for a specified duration')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(opt => opt.setName('target').setDescription('Member to isolate').setRequired(true))
+    .addIntegerOption(opt => opt.setName('minutes').setDescription('Duration of timeout in minutes').setRequired(true)),
 
-  // 6. UTILITY & ADMIN
-  new SlashCommandBuilder().setName('embed').setDescription('Generate custom styled embed').addStringOption(opt => opt.setName('title').setDescription('Title').setRequired(true)).addStringOption(opt => opt.setName('description').setDescription('Description').setRequired(true)),
-  new SlashCommandBuilder().setName('poll').setDescription('Create a poll').addStringOption(opt => opt.setName('question').setDescription('Question').setRequired(true)),
-  new SlashCommandBuilder().setName('say').setDescription('Make the bot echo a message').setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages).addStringOption(opt => opt.setName('message').setDescription('Message').setRequired(true))
+  new SlashCommandBuilder()
+    .setName('untimeout')
+    .setDescription('Removes an active timeout restriction from a member')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addUserOption(opt => opt.setName('target').setDescription('Member to release').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('slowmode')
+    .setDescription('Sets a message rate limit delay for the current channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+    .addIntegerOption(opt => opt.setName('seconds').setDescription('Delay in seconds (0 to turn off)').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('lock')
+    .setDescription('Prevents regular members from sending messages in the current channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+  new SlashCommandBuilder()
+    .setName('unlock')
+    .setDescription('Restores normal message sending permissions for the current channel')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+
+  new SlashCommandBuilder()
+    .setName('kick')
+    .setDescription('Kicks a target user out of the Discord server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+    .addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for kick')),
+
+  new SlashCommandBuilder()
+    .setName('ban')
+    .setDescription('Permanently bans a target user from entering the server')
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for ban')),
+
+  new SlashCommandBuilder()
+    .setName('unban')
+    .setDescription('Revokes an existing user ban using their Discord User ID')
+    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .addStringOption(opt => opt.setName('userid').setDescription('Discord User ID of target').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('say')
+    .setDescription('Makes the bot broadcast a custom raw message')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .addStringOption(opt => opt.setName('message').setDescription('Message payload').setRequired(true)),
+
+  // ================= MEMBER & UTILITY COMMANDS =================
+  new SlashCommandBuilder()
+    .setName('ping')
+    .setDescription('Displays current WebSocket connection latency in milliseconds'),
+
+  new SlashCommandBuilder()
+    .setName('userinfo')
+    .setDescription('Inspects user profile telemetry, account age, and server join dates')
+    .addUserOption(opt => opt.setName('target').setDescription('Target user to inspect')),
+
+  new SlashCommandBuilder()
+    .setName('serverinfo')
+    .setDescription('Displays detailed telemetry, member counts, and ownership of the server'),
+
+  new SlashCommandBuilder()
+    .setName('avatar')
+    .setDescription('Fetches high-resolution profile picture of yourself or another user')
+    .addUserOption(opt => opt.setName('target').setDescription('Target user')),
+
+  new SlashCommandBuilder()
+    .setName('banner')
+    .setDescription('Fetches the high-resolution profile banner of a target user')
+    .addUserOption(opt => opt.setName('target').setDescription('Target user')),
+
+  new SlashCommandBuilder()
+    .setName('botinfo')
+    .setDescription('Displays bot runtime metrics, server load, and uptime telemetry'),
+
+  new SlashCommandBuilder()
+    .setName('embed')
+    .setDescription('Generates a customized dark-mode embedded card message')
+    .addStringOption(opt => opt.setName('title').setDescription('Embed title').setRequired(true))
+    .addStringOption(opt => opt.setName('description').setDescription('Embed main content').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('poll')
+    .setDescription('Launches an interactive community poll with reaction options')
+    .addStringOption(opt => opt.setName('question').setDescription('Poll question topic').setRequired(true)),
+
+  // ================= ECONOMY & PROGRESSION COMMANDS =================
+  new SlashCommandBuilder()
+    .setName('balance')
+    .setDescription('Displays cash wallet and bank vault funds')
+    .addUserOption(opt => opt.setName('target').setDescription('Target user')),
+
+  new SlashCommandBuilder()
+    .setName('daily')
+    .setDescription('Claims your daily cash allowance reward'),
+
+  new SlashCommandBuilder()
+    .setName('work')
+    .setDescription('Perform an hourly job shift to earn money'),
+
+  new SlashCommandBuilder()
+    .setName('deposit')
+    .setDescription('Transfers cash from your wallet into your secure bank account')
+    .addIntegerOption(opt => opt.setName('amount').setDescription('Amount of cash').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('withdraw')
+    .setDescription('Retrieves stored cash from your bank account to your wallet')
+    .addIntegerOption(opt => opt.setName('amount').setDescription('Amount of cash').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('pay')
+    .setDescription('Transfers cash directly from your wallet to another member')
+    .addUserOption(opt => opt.setName('target').setDescription('Recipient user').setRequired(true))
+    .addIntegerOption(opt => opt.setName('amount').setDescription('Amount of cash').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('slots')
+    .setDescription('Gamble cash on the high-payout slot machine')
+    .addIntegerOption(opt => opt.setName('bet').setDescription('Wager amount').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('blackjack')
+    .setDescription('Play a hand of classic blackjack against the house')
+    .addIntegerOption(opt => opt.setName('bet').setDescription('Wager amount').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('rank')
+    .setDescription('Checks level, total XP, and chat progression status')
+    .addUserOption(opt => opt.setName('target').setDescription('Target user')),
+
+  new SlashCommandBuilder()
+    .setName('leaderboard')
+    .setDescription('Views top ranked users on the server level leaderboard'),
+
+  // ================= FUN & SOCIAL COMMANDS =================
+  new SlashCommandBuilder()
+    .setName('ship')
+    .setDescription('Calculates romantic compatibility percentage between two users')
+    .addUserOption(opt => opt.setName('user1').setDescription('First user').setRequired(true))
+    .addUserOption(opt => opt.setName('user2').setDescription('Second user')),
+
+  new SlashCommandBuilder()
+    .setName('coinflip')
+    .setDescription('Flips a standard two-sided coin'),
+
+  new SlashCommandBuilder()
+    .setName('dice')
+    .setDescription('Rolls a die with custom sides')
+    .addIntegerOption(opt => opt.setName('sides').setDescription('Number of sides (Default: 6)')),
+
+  new SlashCommandBuilder()
+    .setName('8ball')
+    .setDescription('Asks the oracle magic 8-ball a question')
+    .addStringOption(opt => opt.setName('question').setDescription('Your question').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('pp')
+    .setDescription('Measures size metric bar')
+    .addUserOption(opt => opt.setName('target').setDescription('Target user')),
+
+  new SlashCommandBuilder()
+    .setName('marry')
+    .setDescription('Proposes interactive marriage to another server member')
+    .addUserOption(opt => opt.setName('partner').setDescription('The target user').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('meme')
+    .setDescription('Fetches a fresh visual image card')
 ].map(cmd => cmd.toJSON());
 
 // --- CLIENT SETUP ---
@@ -71,15 +231,19 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent
   ]
 });
 
 const PALETTE = { DARK: '#2B2D31', SUCCESS: '#57F287', ERROR: '#ED4245', GOLD: '#FEE75C' };
 
-// IN-MEMORY HIGH PERFORMANCE CACHE
+// IN-MEMORY HIGH PERFORMANCE STORAGE
 const economy = new Map();
 const leveling = new Map();
+
+// ANTI-NUKE MONITORING STORAGE (User ID -> Array of timestamps)
+const banTracker = new Map();
 
 const getEco = (id) => economy.get(id) || { wallet: 1000, bank: 0, lastDaily: 0, lastWork: 0 };
 const setEco = (id, data) => economy.set(id, data);
@@ -87,9 +251,26 @@ const setEco = (id, data) => economy.set(id, data);
 const getXp = (id) => leveling.get(id) || { xp: 0, level: 1, lastMessage: 0 };
 const setXp = (id, data) => leveling.set(id, data);
 
-// XP ENGINE
+// ================= ANTI-RAID & LINK SANITIZER =================
+// Automatically deletes ANY links (http, https, discord invites, shortened URLs)
+// BAD WORDS ARE NOT FILTERED.
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
+
+  // Regex pattern matching URLs and invite links
+  const linkRegex = /(https?:\/\/[^\s]+)|(discord\.gg\/[^\s]+)|(discord\.com\/invite\/[^\s]+)/gi;
+
+  if (linkRegex.test(message.content)) {
+    // Exempt administrators from link deletion
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      await message.delete().catch(() => {});
+      const alert = await message.channel.send(`🛡️ <@${message.author.id}>, **Links are restricted in this server.**`);
+      setTimeout(() => alert.delete().catch(() => {}), 5000);
+      return;
+    }
+  }
+
+  // XP progression system engine
   const now = Date.now();
   const userXp = getXp(message.author.id);
 
@@ -108,11 +289,48 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+// ================= ANTI-NUKE DETECTOR =================
+// Triggers when bans occur rapidly. Stoppage occurs if >3 bans happen in 10 seconds.
+client.on('guildBanAdd', async (ban) => {
+  const guild = ban.guild;
+  const auditLogs = await guild.fetchAuditLogs({ limit: 1, type: AuditLogEvent.MemberBanAdd }).catch(() => null);
+  if (!auditLogs) return;
+
+  const entry = auditLogs.entries.first();
+  if (!entry || !entry.executor || entry.executor.id === client.user.id) return;
+
+  const executorId = entry.executor.id;
+  const now = Date.now();
+
+  const userBans = banTracker.get(executorId) || [];
+  const recentBans = userBans.filter(timestamp => now - timestamp < 10000);
+  recentBans.push(now);
+  banTracker.set(executorId, recentBans);
+
+  // Anti-Nuke Threshold: Exceeding 3 bans in 10 seconds triggers auto-neutralization
+  if (recentBans.length >= 3) {
+    const executorMember = await guild.members.fetch(executorId).catch(() => null);
+    if (executorMember && executorMember.id !== guild.ownerId) {
+      // Strips dangerous administrative roles
+      const adminRoles = executorMember.roles.cache.filter(r => r.permissions.has(PermissionFlagsBits.Administrator) || r.permissions.has(PermissionFlagsBits.BanMembers));
+      await executorMember.roles.remove(adminRoles, 'Anti-Nuke Triggered: Rapid Mass Ban Attempt').catch(() => {});
+
+      const systemChannel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased());
+      if (systemChannel) {
+        const embed = new EmbedBuilder()
+          .setColor(PALETTE.ERROR)
+          .setTitle('🚨 ANTI-NUKE SYSTEM ACTIVATED')
+          .setDescription(`**Offender:** <@${executorId}> (\`${executorId}\`)\n**Action Taken:** Administrative and moderation permissions revoked.\n**Reason:** Mass ban threshold exceeded (3+ bans under 10s).`);
+        systemChannel.send({ embeds: [embed] });
+      }
+    }
+  }
+});
+
 // READY EVENT & CUSTOM STATUS
 client.once('ready', async () => {
-  console.log(`Connected as ${client.user.tag}`);
+  console.log(`Security Engine active as ${client.user.tag}`);
   
-  // Set custom status with server invite
   client.user.setPresence({ 
     activities: [{ 
       name: 'JOIN https://discord.gg/8SCGSyTwDb', 
@@ -128,13 +346,101 @@ client.once('ready', async () => {
     } else {
       await rest.put(Routes.applicationGuildCommands(client.user.id, GUILD_ID), { body: commands });
     }
-    console.log('30+ Commands operational.');
+    console.log('All 35+ commands with security features synced.');
   } catch (e) { console.error(e); }
 });
 
-// O(1) MAP-BASED COMMAND HANDLERS
+// O(1) MAP COMMAND HANDLERS
 const handlers = new Map();
 
+// --- SECURITY & ADMIN HANDLERS ---
+handlers.set('antinuke', async (i) => {
+  const embed = new EmbedBuilder()
+    .setColor(PALETTE.DARK)
+    .setTitle('🛡️ Anti-Nuke Protection Active')
+    .setDescription('**Status:** `ENABLED`\n**Ban Limit:** `3 bans per 10 seconds`\n**Penalty:** Automatic permission stripping.');
+  await i.reply({ embeds: [embed] });
+});
+
+handlers.set('lockdown', async (i) => {
+  i.guild.channels.cache.forEach(c => {
+    if (c.isTextBased()) c.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: false }).catch(() => {});
+  });
+  await i.reply({ content: '🚨 **Server Lockdown Executed.** All public text channels locked.' });
+});
+
+handlers.set('unlockall', async (i) => {
+  i.guild.channels.cache.forEach(c => {
+    if (c.isTextBased()) c.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: null }).catch(() => {});
+  });
+  await i.reply({ content: '🔓 **Server Lockdown Lifted.** Public text channel access restored.' });
+});
+
+handlers.set('clear', async (i) => {
+  const amount = i.options.getInteger('amount');
+  await i.channel.bulkDelete(amount, true);
+  await i.reply({ content: `🧹 Purged \`${amount}\` messages.`, ephemeral: true });
+});
+
+handlers.set('warn', async (i) => {
+  const target = i.options.getUser('target');
+  const embed = new EmbedBuilder().setColor(PALETTE.ERROR).setDescription(`⚠️ **Warning Issued**\n**User:** <@${target.id}>\n**Reason:** ${i.options.getString('reason')}`);
+  await i.reply({ embeds: [embed] });
+});
+
+handlers.set('timeout', async (i) => {
+  const member = i.options.getMember('target');
+  const minutes = i.options.getInteger('minutes');
+  await member.timeout(minutes * 60 * 1000);
+  await i.reply({ content: `🔇 Timed out <@${member.id}> for **${minutes}m**.`, ephemeral: true });
+});
+
+handlers.set('untimeout', async (i) => {
+  const member = i.options.getMember('target');
+  await member.timeout(null);
+  await i.reply({ content: `🔊 Lifted timeout for <@${member.id}>.`, ephemeral: true });
+});
+
+handlers.set('slowmode', async (i) => {
+  const seconds = i.options.getInteger('seconds');
+  await i.channel.setRateLimitPerUser(seconds);
+  await i.reply({ content: `⏱️ Slowmode set to \`${seconds}s\`.`, ephemeral: true });
+});
+
+handlers.set('lock', async (i) => {
+  await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: false });
+  await i.reply({ content: '🔒 Channel locked.', ephemeral: true });
+});
+
+handlers.set('unlock', async (i) => {
+  await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: null });
+  await i.reply({ content: '🔓 Channel unlocked.', ephemeral: true });
+});
+
+handlers.set('kick', async (i) => {
+  const member = i.options.getMember('target');
+  await member.kick(i.options.getString('reason') || 'No reason');
+  await i.reply({ content: `👞 Kicked \`${member.user.tag}\`.`, ephemeral: true });
+});
+
+handlers.set('ban', async (i) => {
+  const member = i.options.getMember('target');
+  await member.ban({ reason: i.options.getString('reason') || 'No reason' });
+  await i.reply({ content: `🔨 Banned \`${member.user.tag}\`.`, ephemeral: true });
+});
+
+handlers.set('unban', async (i) => {
+  const userId = i.options.getString('userid');
+  await i.guild.members.unban(userId);
+  await i.reply({ content: `🔓 Unbanned user ID \`${userId}\`.`, ephemeral: true });
+});
+
+handlers.set('say', async (i) => {
+  await i.channel.send(i.options.getString('message'));
+  await i.reply({ content: 'Sent.', ephemeral: true });
+});
+
+// --- MEMBER & UTILITY HANDLERS ---
 handlers.set('ping', async (i) => {
   await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setDescription(`📡 **Websocket Latency:** \`${i.client.ws.ping}ms\``)], ephemeral: true });
 });
@@ -187,65 +493,16 @@ handlers.set('banner', async (i) => {
   await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle(`${target.username}'s Banner`).setImage(target.bannerURL({ size: 1024 }))] });
 });
 
-handlers.set('clear', async (i) => {
-  const amount = i.options.getInteger('amount');
-  await i.channel.bulkDelete(amount, true);
-  await i.reply({ content: `🧹 Purged \`${amount}\` messages.`, ephemeral: true });
+handlers.set('embed', async (i) => {
+  await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle(i.options.getString('title')).setDescription(i.options.getString('description'))] });
 });
 
-handlers.set('warn', async (i) => {
-  const target = i.options.getUser('target');
-  const embed = new EmbedBuilder().setColor(PALETTE.ERROR).setDescription(`⚠️ **Warning Issued**\n**User:** <@${target.id}>\n**Reason:** ${i.options.getString('reason')}`);
-  await i.reply({ embeds: [embed] });
+handlers.set('poll', async (i) => {
+  const msg = await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle('📊 Community Poll').setDescription(i.options.getString('question'))], fetchReply: true });
+  await msg.react('👍'); await msg.react('👎');
 });
 
-handlers.set('timeout', async (i) => {
-  const member = i.options.getMember('target');
-  const minutes = i.options.getInteger('minutes');
-  await member.timeout(minutes * 60 * 1000);
-  await i.reply({ content: `🔇 Timed out <@${member.id}> for **${minutes}m**.`, ephemeral: true });
-});
-
-handlers.set('untimeout', async (i) => {
-  const member = i.options.getMember('target');
-  await member.timeout(null);
-  await i.reply({ content: `🔊 Lifted timeout for <@${member.id}>.`, ephemeral: true });
-});
-
-handlers.set('slowmode', async (i) => {
-  const seconds = i.options.getInteger('seconds');
-  await i.channel.setRateLimitPerUser(seconds);
-  await i.reply({ content: `⏱️ Slowmode set to \`${seconds}s\`.`, ephemeral: true });
-});
-
-handlers.set('lock', async (i) => {
-  await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: false });
-  await i.reply({ content: '🔒 Channel locked.', ephemeral: true });
-});
-
-handlers.set('unlock', async (i) => {
-  await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: null });
-  await i.reply({ content: '🔓 Channel unlocked.', ephemeral: true });
-});
-
-handlers.set('kick', async (i) => {
-  const member = i.options.getMember('target');
-  await member.kick(i.options.getString('reason') || 'No reason');
-  await i.reply({ content: `MD Kicked \`${member.user.tag}\`.`, ephemeral: true });
-});
-
-handlers.set('ban', async (i) => {
-  const member = i.options.getMember('target');
-  await member.ban({ reason: i.options.getString('reason') || 'No reason' });
-  await i.reply({ content: `🔨 Banned \`${member.user.tag}\`.`, ephemeral: true });
-});
-
-handlers.set('unban', async (i) => {
-  const userId = i.options.getString('userid');
-  await i.guild.members.unban(userId);
-  await i.reply({ content: `🔓 Unbanned user ID \`${userId}\`.`, ephemeral: true });
-});
-
+// --- ECONOMY HANDLERS ---
 handlers.set('balance', async (i) => {
   const target = i.options.getUser('target') || i.user;
   const eco = getEco(target.id);
@@ -269,13 +526,13 @@ handlers.set('work', async (i) => {
   eco.wallet += earned;
   eco.lastWork = Date.now();
   setEco(i.user.id, eco);
-  await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.SUCCESS).setDescription(`💼 You worked and earned **$${earned}**.`)] });
+  await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.SUCCESS).setDescription(`💼 Earned **$${earned}** from shift.`)] });
 });
 
 handlers.set('deposit', async (i) => {
   const amt = i.options.getInteger('amount');
   const eco = getEco(i.user.id);
-  if (eco.wallet < amt) return i.reply({ content: '❌ Insufficient cash.', ephemeral: true });
+  if (eco.wallet < amt) return i.reply({ content: '❌ Insufficient wallet cash.', ephemeral: true });
   eco.wallet -= amt; eco.bank += amt; setEco(i.user.id, eco);
   await i.reply({ content: `🏦 Deposited **$${amt}** into bank.`, ephemeral: true });
 });
@@ -300,24 +557,25 @@ handlers.set('pay', async (i) => {
 });
 
 handlers.set('slots', async (i) => {
-  const bet = i.options.getInteger('amount');
+  const bet = i.options.getInteger('bet');
   const eco = getEco(i.user.id);
-  if (eco.wallet < bet) return i.reply({ content: '❌ Insufficient funds.', ephemeral: true });
+  if (eco.wallet < bet) return i.reply({ content: '❌ Insufficient cash.', ephemeral: true });
   const items = ['🎰', '🍒', '🍋', '💎'];
   const [s1, s2, s3] = [items[Math.floor(Math.random()*4)], items[Math.floor(Math.random()*4)], items[Math.floor(Math.random()*4)]];
-  if (s1 === s2 && s2 === s3) { eco.wallet += bet * 3; setEco(i.user.id, eco); await i.reply(`[ ${s1} ${s2} ${s3} ] 🎉 Win! +$${bet * 3}`); }
+  if (s1 === s2 && s2 === s3) { eco.wallet += bet * 3; setEco(i.user.id, eco); await i.reply(`[ ${s1} ${s2} ${s3} ] 🎉 Jackpot! +$${bet * 3}`); }
   else { eco.wallet -= bet; setEco(i.user.id, eco); await i.reply(`[ ${s1} ${s2} ${s3} ] 💔 Lost -$${bet}`); }
 });
 
 handlers.set('blackjack', async (i) => {
   const bet = i.options.getInteger('bet');
   const eco = getEco(i.user.id);
-  if (eco.wallet < bet) return i.reply({ content: '❌ Insufficient funds.', ephemeral: true });
+  if (eco.wallet < bet) return i.reply({ content: '❌ Insufficient cash.', ephemeral: true });
   const p = Math.floor(Math.random()*10)+12, d = Math.floor(Math.random()*10)+12;
   if (p > d || d > 21) { eco.wallet += bet; setEco(i.user.id, eco); await i.reply(`🃏 **Win!** Score: \`${p}\` vs Dealer: \`${d}\` (+$${bet})`); }
   else { eco.wallet -= bet; setEco(i.user.id, eco); await i.reply(`🃏 **Lost!** Score: \`${p}\` vs Dealer: \`${d}\` (-$${bet})`); }
 });
 
+// --- FUN & PROGRESSION HANDLERS ---
 handlers.set('rank', async (i) => {
   const target = i.options.getUser('target') || i.user;
   const xpData = getXp(target.id);
@@ -367,24 +625,10 @@ handlers.set('marry', async (i) => {
 });
 
 handlers.set('meme', async (i) => {
-  await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle('Random Meme').setImage('https://picsum.photos/400/300')] });
+  await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle('Random Meme Card').setImage('https://picsum.photos/400/300')] });
 });
 
-handlers.set('embed', async (i) => {
-  await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle(i.options.getString('title')).setDescription(i.options.getString('description'))] });
-});
-
-handlers.set('poll', async (i) => {
-  const msg = await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle('📊 Poll').setDescription(i.options.getString('question'))], fetchReply: true });
-  await msg.react('👍'); await msg.react('👎');
-});
-
-handlers.set('say', async (i) => {
-  await i.channel.send(i.options.getString('message'));
-  await i.reply({ content: 'Sent.', ephemeral: true });
-});
-
-// INTERACTION ROUTER
+// ROUTE INTERACTION
 client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     const [action, proposerId, partnerId] = interaction.customId.split('_');
@@ -413,6 +657,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
 
 
 
