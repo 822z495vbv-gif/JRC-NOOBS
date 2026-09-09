@@ -1,3 +1,4 @@
+
 const { 
   Client, 
   GatewayIntentBits, 
@@ -5,89 +6,90 @@ const {
   Routes, 
   SlashCommandBuilder, 
   EmbedBuilder, 
-  PermissionFlagsBits 
+  PermissionFlagsBits,
+  ActivityType
 } = require('discord.js');
 
-// 1. Define All Dyno & Carl-Bot Style Slash Commands
+// 1. Define Slash Commands
 const commands = [
   // --- UTILITY & INFO ---
   new SlashCommandBuilder()
     .setName('ping')
-    .setDescription('Checks bot response time'),
+    .setDescription('Checks bot latency'),
 
   new SlashCommandBuilder()
     .setName('userinfo')
-    .setDescription('Displays information about a user')
-    .addUserOption(option => option.setName('target').setDescription('The user to inspect')),
+    .setDescription('Get details about a user')
+    .addUserOption(opt => opt.setName('target').setDescription('User to inspect')),
 
   new SlashCommandBuilder()
     .setName('serverinfo')
-    .setDescription('Displays details about this server'),
+    .setDescription('Get details about this server'),
 
   new SlashCommandBuilder()
     .setName('avatar')
-    .setDescription('Get the full-size avatar of a user')
-    .addUserOption(option => option.setName('target').setDescription('The user')),
+    .setDescription('View full size avatar of a user')
+    .addUserOption(opt => opt.setName('target').setDescription('User to view')),
 
   new SlashCommandBuilder()
     .setName('embed')
-    .setDescription('Creates a Carl-bot styled announcement embed')
-    .addStringOption(option => option.setName('title').setDescription('Title').setRequired(true))
-    .addStringOption(option => option.setName('description').setDescription('Main text').setRequired(true)),
+    .setDescription('Create a stylized announcement embed')
+    .addStringOption(opt => opt.setName('title').setDescription('Title').setRequired(true))
+    .addStringOption(opt => opt.setName('description').setDescription('Main text').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('poll')
-    .setDescription('Creates a quick reaction poll (Dyno style)')
-    .addStringOption(option => option.setName('question').setDescription('Poll question').setRequired(true)),
+    .setDescription('Start a community reaction poll')
+    .addStringOption(opt => opt.setName('question').setDescription('Poll question').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('roll')
-    .setDescription('Rolls a random number (1-100) or dice'),
+    .setDescription('Roll a random number from 1 to 100'),
 
-  // --- MODERATION & CHANNEL CONTROL ---
+  // --- MODERATION ---
   new SlashCommandBuilder()
     .setName('clear')
-    .setDescription('Deletes a specified number of messages')
+    .setDescription('Bulk delete messages')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
-    .addIntegerOption(option => option.setName('amount').setDescription('Number of messages (1-100)').setRequired(true)),
+    .addIntegerOption(opt => opt.setName('amount').setDescription('Number of messages (1-100)').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('warn')
-    .setDescription('Warns a member for breaking rules')
+    .setDescription('Warn a user for rule breaking')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addUserOption(option => option.setName('target').setDescription('Member to warn').setRequired(true))
-    .addStringOption(option => option.setName('reason').setDescription('Reason for warning').setRequired(true)),
+    .addUserOption(opt => opt.setName('target').setDescription('Member to warn').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('slowmode')
-    .setDescription('Set chat slowmode delay (Dyno feature)')
+    .setDescription('Set channel slowmode delay')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-    .addIntegerOption(option => option.setName('seconds').setDescription('Delay in seconds (0 to turn off)').setRequired(true)),
+    .addIntegerOption(opt => opt.setName('seconds').setDescription('Delay in seconds (0 = off)').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('lock')
-    .setDescription('Locks the current channel from member messages')
+    .setDescription('Lock current channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
   new SlashCommandBuilder()
     .setName('unlock')
-    .setDescription('Unlocks the current channel')
+    .setDescription('Unlock current channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
   new SlashCommandBuilder()
     .setName('kick')
     .setDescription('Kick a member from the server')
     .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
-    .addUserOption(option => option.setName('target').setDescription('Member to kick').setRequired(true))
-    .addStringOption(option => option.setName('reason').setDescription('Reason')),
+    .addUserOption(opt => opt.setName('target').setDescription('Member to kick').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason')),
 
   new SlashCommandBuilder()
     .setName('ban')
     .setDescription('Ban a member from the server')
     .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
-    .addUserOption(option => option.setName('target').setDescription('Member to ban').setRequired(true))
-    .addStringOption(option => option.setName('reason').setDescription('Reason'))
-].map(command => command.toJSON());
+    .addUserOption(opt => opt.setName('target').setDescription('Member to ban').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason'))
+].map(cmd => cmd.toJSON());
 
 // 2. Initialize Client
 const client = new Client({
@@ -98,159 +100,199 @@ const client = new Client({
   ]
 });
 
-// 3. Register Commands on Startup
+// 3. Ready Event & Registration
 client.once('ready', async () => {
   console.log(`LoggedIn as ${client.user.tag}`);
+
+  // Set Profile Playing Status
+  client.user.setPresence({
+    activities: [{ name: '/ping | Managing Server', type: ActivityType.Playing }],
+    status: 'online',
+  });
+
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
   try {
-    console.log('Registering Dyno & Carl-bot slash commands...');
+    console.log('Syncing Slash Commands with Discord API...');
     await rest.put(
       Routes.applicationCommands(client.user.id),
       { body: commands }
     );
-    console.log('Successfully registered all global slash commands!');
+    console.log('Successfully loaded all global commands!');
   } catch (error) {
-    console.error('Failed to register commands:', error);
+    console.error('Command registration error:', error);
   }
 });
 
-// 4. Command Handlers
+// 4. Command Executor with Error Protection
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
-  const { commandName, options, guild, channel } = interaction;
+  const { commandName, options, guild, channel, user } = interaction;
 
-  // /ping
-  if (commandName === 'ping') {
-    await interaction.reply(`🏓 Pong! Latency: \`${client.ws.ping}ms\``);
-  }
+  try {
+    // /ping
+    if (commandName === 'ping') {
+      await interaction.reply({
+        content: `🏓 **Pong!** API Latency: \`${client.ws.ping}ms\``,
+        ephemeral: true
+      });
+    }
 
-  // /userinfo
-  if (commandName === 'userinfo') {
-    const user = options.getUser('target') || interaction.user;
-    const member = await guild.members.fetch(user.id);
+    // /userinfo
+    else if (commandName === 'userinfo') {
+      const targetUser = options.getUser('target') || user;
+      const member = await guild.members.fetch(targetUser.id).catch(() => null);
 
-    const embed = new EmbedBuilder()
-      .setColor('#5865F2')
-      .setThumbnail(user.displayAvatarURL({ dynamic: true }))
-      .setTitle(`User Info - ${user.username}`)
-      .addFields(
-        { name: 'Account Created', value: `<t:${Math.floor(user.createdTimestamp / 1000)}:R>`, inline: true },
-        { name: 'Joined Server', value: `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>`, inline: true },
-        { name: 'Roles', value: `${member.roles.cache.size - 1}`, inline: true }
-      );
-    await interaction.reply({ embeds: [embed] });
-  }
+      const embed = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
+        .setTitle(`User Overview • ${targetUser.username}`)
+        .addFields(
+          { name: '🆔 User ID', value: `\`${targetUser.id}\``, inline: true },
+          { name: '📅 Created', value: `<t:${Math.floor(targetUser.createdTimestamp / 1000)}:R>`, inline: true },
+          { name: '📥 Joined', value: member ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : 'Unknown', inline: true }
+        )
+        .setFooter({ text: 'XGFX System' })
+        .setTimestamp();
 
-  // /serverinfo
-  if (commandName === 'serverinfo') {
-    const embed = new EmbedBuilder()
-      .setColor('#5865F2')
-      .setTitle(`${guild.name} Info`)
-      .setThumbnail(guild.iconURL({ dynamic: true }))
-      .addFields(
-        { name: 'Owner', value: `<@${guild.ownerId}>`, inline: true },
-        { name: 'Members', value: `${guild.memberCount}`, inline: true },
-        { name: 'Created On', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true }
-      );
-    await interaction.reply({ embeds: [embed] });
-  }
+      await interaction.reply({ embeds: [embed] });
+    }
 
-  // /avatar
-  if (commandName === 'avatar') {
-    const user = options.getUser('target') || interaction.user;
-    const embed = new EmbedBuilder()
-      .setColor('#0099ff')
-      .setTitle(`${user.username}'s Avatar`)
-      .setImage(user.displayAvatarURL({ dynamic: true, size: 512 }));
-    await interaction.reply({ embeds: [embed] });
-  }
+    // /serverinfo
+    else if (commandName === 'serverinfo') {
+      const embed = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setTitle(`${guild.name}`)
+        .setThumbnail(guild.iconURL({ dynamic: true }))
+        .addFields(
+          { name: '👑 Owner', value: `<@${guild.ownerId}>`, inline: true },
+          { name: '👥 Members', value: `\`${guild.memberCount}\``, inline: true },
+          { name: '✨ Created', value: `<t:${Math.floor(guild.createdTimestamp / 1000)}:D>`, inline: true }
+        )
+        .setFooter({ text: 'XGFX System' })
+        .setTimestamp();
 
-  // /poll
-  if (commandName === 'poll') {
-    const question = options.getString('question');
-    const embed = new EmbedBuilder()
-      .setColor('#00ff7f')
-      .setTitle('📊 Community Poll')
-      .setDescription(question)
-      .setFooter({ text: `Created by ${interaction.user.username}` });
+      await interaction.reply({ embeds: [embed] });
+    }
 
-    const pollMsg = await interaction.reply({ embeds: [embed], fetchReply: true });
-    await pollMsg.react('👍');
-    await pollMsg.react('👎');
-  }
+    // /avatar
+    else if (commandName === 'avatar') {
+      const targetUser = options.getUser('target') || user;
+      const embed = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setTitle(`${targetUser.username}'s Avatar`)
+        .setImage(targetUser.displayAvatarURL({ dynamic: true, size: 1024 }));
 
-  // /roll
-  if (commandName === 'roll') {
-    const roll = Math.floor(Math.random() * 100) + 1;
-    await interaction.reply(`🎲 **${interaction.user.username}** rolled a **${roll}** (1-100)!`);
-  }
+      await interaction.reply({ embeds: [embed] });
+    }
 
-  // /warn
-  if (commandName === 'warn') {
-    const target = options.getUser('target');
-    const reason = options.getString('reason');
+    // /poll
+    else if (commandName === 'poll') {
+      const question = options.getString('question');
+      const embed = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setTitle('📊 Community Poll')
+        .setDescription(`${question}\n\n-# Created by <@${user.id}>`)
+        .setTimestamp();
 
-    const embed = new EmbedBuilder()
-      .setColor('#ff9900')
-      .setTitle('⚠️ Warning Issued')
-      .setDescription(`**User:** ${target.tag}\n**Reason:** ${reason}\n**Moderator:** ${interaction.user.tag}`);
+      const msg = await interaction.reply({ embeds: [embed], fetchReply: true });
+      await msg.react('👍');
+      await msg.react('👎');
+    }
 
-    await interaction.reply({ embeds: [embed] });
-  }
+    // /roll
+    else if (commandName === 'roll') {
+      const roll = Math.floor(Math.random() * 100) + 1;
+      await interaction.reply(`🎲 **${user.username}** rolled **${roll}** (1-100)!`);
+    }
 
-  // /slowmode
-  if (commandName === 'slowmode') {
-    const seconds = options.getInteger('seconds');
-    await channel.setRateLimitPerUser(seconds);
-    await interaction.reply(`⏱️ Slowmode set to **${seconds} seconds** for this channel.`);
-  }
+    // /warn
+    else if (commandName === 'warn') {
+      const target = options.getUser('target');
+      const reason = options.getString('reason');
 
-  // /lock
-  if (commandName === 'lock') {
-    await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
-    await interaction.reply('🔒 Channel locked! Members cannot send messages.');
-  }
+      const embed = new EmbedBuilder()
+        .setColor('#ED4245')
+        .setTitle('⚠️ Warning Issued')
+        .addFields(
+          { name: 'User', value: `<@${target.id}>`, inline: true },
+          { name: 'Moderator', value: `<@${user.id}>`, inline: true },
+          { name: 'Reason', value: reason }
+        )
+        .setTimestamp();
 
-  // /unlock
-  if (commandName === 'unlock') {
-    await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
-    await interaction.reply('🔓 Channel unlocked!');
-  }
+      await interaction.reply({ embeds: [embed] });
+    }
 
-  // /embed
-  if (commandName === 'embed') {
-    const embed = new EmbedBuilder()
-      .setColor('#0099ff')
-      .setTitle(options.getString('title'))
-      .setDescription(options.getString('description'))
-      .setFooter({ text: `Posted by ${interaction.user.username}` })
-      .setTimestamp();
-    await interaction.reply({ embeds: [embed] });
-  }
+    // /slowmode
+    else if (commandName === 'slowmode') {
+      const seconds = options.getInteger('seconds');
+      await channel.setRateLimitPerUser(seconds);
+      await interaction.reply({ content: `⏱️ Slowmode set to **${seconds} seconds**.`, ephemeral: true });
+    }
 
-  // /clear
-  if (commandName === 'clear') {
-    const amount = options.getInteger('amount');
-    await channel.bulkDelete(amount, true);
-    await interaction.reply({ content: `🧹 Cleared **${amount}** messages.`, ephemeral: true });
-  }
+    // /lock
+    else if (commandName === 'lock') {
+      await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+      await interaction.reply({ content: '🔒 Channel locked.', ephemeral: true });
+    }
 
-  // /kick
-  if (commandName === 'kick') {
-    const target = options.getMember('target');
-    const reason = options.getString('reason') || 'No reason provided';
-    await target.kick(reason);
-    await interaction.reply(`👞 **${target.user.tag}** kicked. Reason: ${reason}`);
-  }
+    // /unlock
+    else if (commandName === 'unlock') {
+      await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
+      await interaction.reply({ content: '🔓 Channel unlocked.', ephemeral: true });
+    }
 
-  // /ban
-  if (commandName === 'ban') {
-    const target = options.getMember('target');
-    const reason = options.getString('reason') || 'No reason provided';
-    await target.ban({ reason });
-    await interaction.reply(`🔨 **${target.user.tag}** banned. Reason: ${reason}`);
+    // /embed
+    else if (commandName === 'embed') {
+      const embed = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setTitle(options.getString('title'))
+        .setDescription(options.getString('description'))
+        .setFooter({ text: `Posted by ${user.username}` })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [embed] });
+    }
+
+    // /clear
+    else if (commandName === 'clear') {
+      const amount = options.getInteger('amount');
+      if (amount < 1 || amount > 100) {
+        return interaction.reply({ content: 'Enter a number between 1 and 100.', ephemeral: true });
+      }
+      await channel.bulkDelete(amount, true);
+      await interaction.reply({ content: `🧹 Cleared **${amount}** messages.`, ephemeral: true });
+    }
+
+    // /kick
+    else if (commandName === 'kick') {
+      const target = options.getMember('target');
+      const reason = options.getString('reason') || 'No reason provided';
+      if (!target || !target.kickable) {
+        return interaction.reply({ content: 'Unable to kick this user.', ephemeral: true });
+      }
+      await target.kick(reason);
+      await interaction.reply(`👞 Kicked **${target.user.tag}**. Reason: ${reason}`);
+    }
+
+    // /ban
+    else if (commandName === 'ban') {
+      const target = options.getMember('target');
+      const reason = options.getString('reason') || 'No reason provided';
+      if (!target) {
+        return interaction.reply({ content: 'Member not found.', ephemeral: true });
+      }
+      await target.ban({ reason });
+      await interaction.reply(`🔨 Banned **${target.user.tag}**. Reason: ${reason}`);
+    }
+
+  } catch (error) {
+    console.error(`Error executing ${commandName}:`, error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: '❌ An error occurred executing this command.', ephemeral: true }).catch(() => {});
+    }
   }
 });
 
