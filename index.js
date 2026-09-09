@@ -279,7 +279,6 @@ const client = new Client({
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
 
-  // LINK REMOVAL (Http, https, discord invites) - Bad words left completely unfiltered
   const linkRegex = /(https?:\/\/[^\s]+)|(discord\.gg\/[^\s]+)|(discord\.com\/invite\/[^\s]+)/gi;
   if (linkRegex.test(message.content)) {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
@@ -290,7 +289,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // XP PROGRESSION ENGINE
   const now = Date.now();
   const userXp = getXp(message.author.id);
 
@@ -358,7 +356,6 @@ client.once('ready', async () => {
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
-    // Global deployment ensures commands show under "View All Commands" on profile cards
     await rest.put(
       Routes.applicationCommands(client.user.id),
       { body: commands }
@@ -390,7 +387,6 @@ client.on('interactionCreate', async (i) => {
   const group = i.commandName;
   const sub = i.options.getSubcommand(false);
 
-  // ---------------- /moderation HANDLERS ----------------
   if (group === 'moderation') {
     if (sub === 'ban') {
       const target = i.options.getMember('target');
@@ -475,7 +471,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ---------------- /role HANDLERS ----------------
   if (group === 'role') {
     if (sub === 'add') {
       const target = i.options.getMember('target');
@@ -540,7 +535,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ---------------- /security HANDLERS ----------------
   if (group === 'security') {
     if (sub === 'antinuke') {
       const embed = new EmbedBuilder()
@@ -563,7 +557,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ---------------- /utility HANDLERS ----------------
   if (group === 'utility') {
     if (sub === 'ping') {
       return i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setDescription(`📡 **Websocket Latency:** \`${i.client.ws.ping}ms\``)], ephemeral: true });
@@ -604,7 +597,7 @@ client.on('interactionCreate', async (i) => {
     }
     if (sub === 'avatar') {
       const target = i.options.getUser('target') || i.user;
-      return i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle(`${target.username}'s Avatar`).setImage(target.displayAvatarURL({ size: 1024 }))] });
+      return i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.DARK).setTitle(`${target.username}'s Avatar`).setImage(target.displayAvatarURL({ size: 1024 }))]} );
     }
     if (sub === 'banner') {
       const target = await i.client.users.fetch((i.options.getUser('target') || i.user).id, { force: true });
@@ -629,7 +622,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ---------------- /economy HANDLERS ----------------
   if (group === 'economy') {
     if (sub === 'balance') {
       const target = i.options.getUser('target') || i.user;
@@ -713,7 +705,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ---------------- /fun HANDLERS ----------------
   if (group === 'fun') {
     if (sub === 'ship') {
       const t1 = i.options.getUser('user1'), t2 = i.options.getUser('user2') || i.user;
@@ -751,7 +742,6 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ---------------- /leveling HANDLERS ----------------
   if (group === 'leveling') {
     if (sub === 'rank') {
       const target = i.options.getUser('target') || i.user;
@@ -772,14 +762,13 @@ client.on('interactionCreate', async (i) => {
     }
   }
 
-  // ---------------- /bump HANDLER ----------------
   if (group === 'bump') {
     return i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.SUCCESS).setTitle('Bumped!').setDescription('Server bump recorded.')] });
   }
 });
 
-// START BOT LOGINS
 client.login(process.env.DISCORD_TOKEN);
+
 
 
 
