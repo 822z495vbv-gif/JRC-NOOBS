@@ -1,4 +1,4 @@
-const { 
+Const { 
   Client, 
   GatewayIntentBits, 
   REST, 
@@ -298,6 +298,36 @@ client.once('ready', async () => {
 // --- INTERACTION ROUTER & CONTROLLERS ---
 // ==========================================
 client.on('interactionCreate', async (i) => {
+  // Handle Button Interactions
+  if (i.isButton()) {
+    if (i.customId === 'wel_config') {
+      return i.reply({ content: '⚙️ Configuration settings panel accessed.', ephemeral: true });
+    }
+    if (i.customId === 'wel_channel') {
+      return i.reply({ content: '📢 Use the `/welcome channel` command to specify your broadcast channel.', ephemeral: true });
+    }
+    if (i.customId === 'wel_preview') {
+      const embed = new EmbedBuilder()
+        .setColor(PALETTE.INFO)
+        .setTitle('🎉 Welcome Preview')
+        .setDescription(`Welcome <@${i.user.id}> to ${i.guild.name}!`);
+      return i.reply({ embeds: [embed], ephemeral: true });
+    }
+    if (i.customId === 'wel_enable') {
+      let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
+      cfg.enabled = true;
+      welcomeConfig.set(i.guild.id, cfg);
+      return i.reply({ content: '🟢 Welcome greeting engine has been **enabled**!', ephemeral: true });
+    }
+    if (i.customId === 'wel_disable') {
+      let cfg = welcomeConfig.get(i.guild.id) || { enabled: true };
+      cfg.enabled = false;
+      welcomeConfig.set(i.guild.id, cfg);
+      return i.reply({ content: '🔴 Welcome greeting engine has been **disabled**.', ephemeral: true });
+    }
+    return;
+  }
+
   if (!i.isChatInputCommand()) return;
 
   const group = i.commandName;
@@ -648,4 +678,5 @@ client.on('interactionCreate', async (i) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
+
 
