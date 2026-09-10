@@ -858,7 +858,7 @@ commands.push(
         )
       )
     )
-.toJSON(),
+
 
     .addSubcommand(s =>
       s.setName("coinflip").setDescription("Flip a coin")
