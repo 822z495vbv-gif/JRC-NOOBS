@@ -2976,5 +2976,4 @@ client.on("interactionCreate", async interaction => {
 /* =========================================================
    LOGIN
    ========================================================= */
-
-client.login(TOKEN);
+client.login(MTU0NzE4NzQ4OTkzMTAwMTkxNw.Gi56IL.BnSqiw54XftDJXhjyYdEaSpYS_Ejlf3zc8MELA);
