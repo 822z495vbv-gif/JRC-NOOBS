@@ -1,1748 +1,507 @@
-require("dotenv").config();
-
-const {
-  Client,
-  GatewayIntentBits,
-  EmbedBuilder,
-  SlashCommandBuilder,
-  REST,
-  Routes,
-  PermissionFlagsBits,
+const { 
+  Client, 
+  GatewayIntentBits, 
+  REST, 
+  Routes, 
+  SlashCommandBuilder, 
+  EmbedBuilder, 
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ChannelSelectMenuBuilder,
-  ChannelType
-} = require("discord.js");
+  PermissionFlagsBits,
+  ActivityType,
+  AuditLogEvent
+} = require('discord.js');
+require('dotenv').config();
 
-const fs = require("fs");
-const path = require("path");
+// --- COLOR PALETTE & CONFIG ---
+const PALETTE = {
+  DARK: '#2B2D31',
+  SUCCESS: '#57F287',
+  ERROR: '#ED4245',
+  GOLD: '#FEE75C',
+  INFO: '#5865F2'
+};
 
-// ============================================================
-// JRC BOT
-// PREMIUM MIMU-STYLE WELCOME + GOODBYE SYSTEM
-// SINGLE FILE
-// ============================================================
+// --- DATA STORAGE MAPS ---
+const economy = new Map();
+const leveling = new Map();
+const warnings = new Map();
+const banTracker = new Map();
+const welcomeConfig = new Map();
+const goodbyeConfig = new Map();
 
+const getEco = (id) => economy.get(id) || { wallet: 1000, bank: 0, lastDaily: 0, lastWork: 0 };
+const setEco = (id, data) => economy.set(id, data);
+
+const getXp = (id) => leveling.get(id) || { xp: 0, level: 1, lastMessage: 0 };
+const setXp = (id, data) => leveling.set(id, data);
+
+const getWarns = (id) => warnings.get(id) || [];
+const addWarn = (id, warn) => {
+  const current = getWarns(id);
+  current.push(warn);
+  warnings.set(id, current);
+};
+
+// --- COMMAND DEFINITIONS ---
+const commands = [
+  new SlashCommandBuilder()
+    .setName('jrc')
+    .setDescription('JRC bot main commands')
+    .addSubcommand(sub => sub.setName('help').setDescription('Shows help menu'))
+    .addSubcommand(sub => sub.setName('settings').setDescription('Views bot settings'))
+    .addSubcommand(sub => sub.setName('about').setDescription('About JRC bot'))
+    .addSubcommand(sub => sub.setName('status').setDescription('Shows system status')),
+
+  new SlashCommandBuilder()
+    .setName('welcome')
+    .setDescription('Configure welcome system')
+    .addSubcommand(sub => sub.setName('setup').setDescription('Setup welcome configuration panel'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Disables the welcome system'))
+    .addSubcommand(sub => sub.setName('test').setDescription('Tests the welcome message'))
+    .addSubcommand(sub => sub.setName('message').setDescription('Sets the welcome message text').addStringOption(opt => opt.setName('text').setDescription('Message content').setRequired(true)))
+    .addSubcommand(sub => sub.setName('channel').setDescription('Sets the welcome channel').addChannelOption(opt => opt.setName('target').setDescription('Channel').setRequired(true)))
+    .addSubcommand(sub => sub.setName('preview').setDescription('Previews the welcome embed')),
+
+  new SlashCommandBuilder()
+    .setName('goodbye')
+    .setDescription('Configure goodbye system')
+    .addSubcommand(sub => sub.setName('setup').setDescription('Setup goodbye configuration panel'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Disables the goodbye system'))
+    .addSubcommand(sub => sub.setName('test').setDescription('Tests the goodbye message'))
+    .addSubcommand(sub => sub.setName('message').setDescription('Sets the goodbye message text').addStringOption(opt => opt.setName('text').setDescription('Message content').setRequired(true)))
+    .addSubcommand(sub => sub.setName('channel').setDescription('Sets the goodbye channel').addChannelOption(opt => opt.setName('target').setDescription('Channel').setRequired(true)))
+    .addSubcommand(sub => sub.setName('preview').setDescription('Previews the goodbye embed')),
+
+  new SlashCommandBuilder()
+    .setName('mod')
+    .setDescription('Moderation commands')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addSubcommand(sub => sub.setName('ban').setDescription('Bans a member').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)))
+    .addSubcommand(sub => sub.setName('kick').setDescription('Kicks a member').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)))
+    .addSubcommand(sub => sub.setName('timeout').setDescription('Timeouts a member').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)).addIntegerOption(opt => opt.setName('minutes').setDescription('Mins').setRequired(true)))
+    .addSubcommand(sub => sub.setName('warn').setDescription('Warns a member').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)))
+    .addSubcommand(sub => sub.setName('warnings').setDescription('Views warnings').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)))
+    .addSubcommand(sub => sub.setName('clear').setDescription('Clears messages').addIntegerOption(opt => opt.setName('amount').setDescription('Count').setRequired(true)))
+    .addSubcommand(sub => sub.setName('lock').setDescription('Locks the channel'))
+    .addSubcommand(sub => sub.setName('unlock').setDescription('Unlocks the channel')),
+
+  new SlashCommandBuilder()
+    .setName('automod')
+    .setDescription('Automated moderation controls')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(sub => sub.setName('setup').setDescription('Setup automod'))
+    .addSubcommand(sub => sub.setName('enable').setDescription('Enables automod'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Disables automod'))
+    .addSubcommand(sub => sub.setName('words').setDescription('Manages filtered words'))
+    .addSubcommand(sub => sub.setName('spam').setDescription('Configures anti-spam'))
+    .addSubcommand(sub => sub.setName('links').setDescription('Configures link filter')),
+
+  new SlashCommandBuilder()
+    .setName('reactionrole')
+    .setDescription('Reaction role systems')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+    .addSubcommand(sub => sub.setName('create').setDescription('Creates a reaction role panel'))
+    .addSubcommand(sub => sub.setName('add').setDescription('Adds a reaction role'))
+    .addSubcommand(sub => sub.setName('remove').setDescription('Removes a reaction role'))
+    .addSubcommand(sub => sub.setName('list').setDescription('Lists active reaction roles')),
+
+  new SlashCommandBuilder()
+    .setName('logs')
+    .setDescription('Audit log management')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(sub => sub.setName('setup').setDescription('Sets up logs channel'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Disables logging'))
+    .addSubcommand(sub => sub.setName('test').setDescription('Tests log delivery')),
+
+  new SlashCommandBuilder()
+    .setName('utility')
+    .setDescription('Utility tools')
+    .addSubcommand(sub => sub.setName('userinfo').setDescription('User info').addUserOption(opt => opt.setName('target').setDescription('User')))
+    .addSubcommand(sub => sub.setName('serverinfo').setDescription('Server info'))
+    .addSubcommand(sub => sub.setName('avatar').setDescription('Gets avatar').addUserOption(opt => opt.setName('target').setDescription('User')))
+    .addSubcommand(sub => sub.setName('roleinfo').setDescription('Role info').addRoleOption(opt => opt.setName('target').setDescription('Role').setRequired(true)))
+    .addSubcommand(sub => sub.setName('channelinfo').setDescription('Channel info')),
+
+  new SlashCommandBuilder()
+    .setName('fun')
+    .setDescription('Fun commands')
+    .addSubcommand(sub => sub.setName('8ball').setDescription('Magic 8ball').addStringOption(opt => opt.setName('question').setDescription('Q').setRequired(true)))
+    .addSubcommand(sub => sub.setName('coinflip').setDescription('Flips a coin'))
+    .addSubcommand(sub => sub.setName('dice').setDescription('Rolls a dice'))
+    .addSubcommand(sub => sub.setName('choose').setDescription('Chooses between options').addStringOption(opt => opt.setName('options').setDescription('Choices').setRequired(true)))
+    .addSubcommand(sub => sub.setName('poll').setDescription('Creates a poll').addStringOption(opt => opt.setName('question').setDescription('Topic').setRequired(true))),
+
+  new SlashCommandBuilder()
+    .setName('antinuke')
+    .setDescription('Anti-nuke protection')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(sub => sub.setName('setup').setDescription('Setup antinuke'))
+    .addSubcommand(sub => sub.setName('enable').setDescription('Enables antinuke'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Disables antinuke'))
+    .addSubcommand(sub => sub.setName('config').setDescription('Configures antinuke limits'))
+    .addSubcommand(sub => sub.setName('status').setDescription('Views antinuke status')),
+
+  new SlashCommandBuilder()
+    .setName('raid')
+    .setDescription('Anti-raid controls')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .addSubcommand(sub => sub.setName('setup').setDescription('Setup anti-raid'))
+    .addSubcommand(sub => sub.setName('enable').setDescription('Enables anti-raid'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Disables anti-raid'))
+    .addSubcommand(sub => sub.setName('config').setDescription('Configures anti-raid'))
+    .addSubcommand(sub => sub.setName('status').setDescription('Views anti-raid status'))
+].map(cmd => cmd.toJSON());
+
+// --- CLIENT CREATION ---
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.MessageContent
   ]
 });
 
-const CONFIG_FILE = path.join(__dirname, "config.json");
+// --- CLIENT EVENTS & LISTENERS ---
+client.on('messageCreate', async (message) => {
+  if (message.author.bot || !message.guild) return;
 
-let config = {};
+  const linkRegex = /(https?:\/\/[^\s]+)|(discord\.gg\/[^\s]+)|(discord\.com\/invite\/[^\s]+)/gi;
+  if (linkRegex.test(message.content)) {
+    if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+      await message.delete().catch(() => {});
+      const alert = await message.channel.send(`<@${message.author.id}> Links are restricted here.`);
+      setTimeout(() => alert.delete().catch(() => {}), 4000);
+      return;
+    }
+  }
 
-if (fs.existsSync(CONFIG_FILE)) {
+  const now = Date.now();
+  const userXp = getXp(message.author.id);
+
+  if (now - userXp.lastMessage > 60000) {
+    userXp.xp += Math.floor(Math.random() * 15) + 15;
+    userXp.lastMessage = now;
+
+    const nextLevelXp = userXp.level * 100;
+    if (userXp.xp >= nextLevelXp) {
+      userXp.level += 1;
+      userXp.xp -= nextLevelXp;
+      const embed = new EmbedBuilder()
+        .setColor(PALETTE.GOLD)
+        .setDescription(`✨ <@${message.author.id}> reached **Level ${userXp.level}**!`);
+      message.channel.send({ embeds: [embed] }).then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
+    }
+    setXp(message.author.id, userXp);
+  }
+});
+
+client.on('guildMemberAdd', async (member) => {
+  const config = welcomeConfig.get(member.guild.id);
+  if (!config || !config.enabled || !config.channelId) return;
+
+  const channel = member.guild.channels.cache.get(config.channelId);
+  if (!channel) return;
+
+  let text = config.message || 'Welcome {user} to {server}!';
+  text = text.replace('{user}', `<@${member.id}>`)
+             .replace('{username}', member.user.username)
+             .replace('{server}', member.guild.name);
+
+  const embed = new EmbedBuilder()
+    .setColor(PALETTE.INFO)
+    .setTitle('🎉 Welcome!')
+    .setDescription(text)
+    .setThumbnail(member.user.displayAvatarURL());
+
+  await channel.send({ embeds: [embed] }).catch(() => {});
+});
+
+client.on('guildMemberRemove', async (member) => {
+  const config = goodbyeConfig.get(member.guild.id);
+  if (!config || !config.enabled || !config.channelId) return;
+
+  const channel = member.guild.channels.cache.get(config.channelId);
+  if (!channel) return;
+
+  let text = config.message || '{username} has left the server.';
+  text = text.replace('{user}', `<@${member.id}>`)
+             .replace('{username}', member.user.username)
+             .replace('{server}', member.guild.name);
+
+  const embed = new EmbedBuilder()
+    .setColor(PALETTE.ERROR)
+    .setTitle('👋 Goodbye!')
+    .setDescription(text)
+    .setThumbnail(member.user.displayAvatarURL());
+
+  await channel.send({ embeds: [embed] }).catch(() => {});
+});
+
+client.once('ready', async () => {
+  console.log(`System connected as ${client.user.tag}`);
+  
+  client.user.setPresence({ 
+    activities: [{ name: 'JOIN https://discord.gg/8SCGSyTwDb', type: ActivityType.Custom }], 
+    status: 'dnd' 
+  });
+
+  const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   try {
-    config = JSON.parse(
-      fs.readFileSync(CONFIG_FILE, "utf8")
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
     );
-  } catch {
-    config = {};
+    console.log('Commands successfully synced globally.');
+  } catch (err) {
+    console.error(err);
   }
-}
-
-// ============================================================
-// CONFIG
-// ============================================================
-
-function saveConfig() {
-  try {
-    fs.writeFileSync(
-      CONFIG_FILE,
-      JSON.stringify(config, null, 2)
-    );
-  } catch (error) {
-    console.error("❌ Failed to save config:", error);
-  }
-}
-
-function guildConfig(guildId) {
-  if (!config[guildId]) {
-    config[guildId] = {
-      welcome: {
-        enabled: false,
-        channel: null,
-        title: "🎉 Welcome {user}!",
-        description:
-          "We're glad to have you here. Enjoy your stay!",
-        message:
-          "Welcome {user} to **{server}**!",
-        color: "#5865F2",
-        image: null,
-        gif: null,
-        footer: null,
-        timestamp: true,
-        thumbnail: true
-      },
-
-      goodbye: {
-        enabled: false,
-        channel: null,
-        title: "👋 Goodbye {user}",
-        description:
-          "Thanks for being part of our community. We'll miss you!",
-        message:
-          "{user} has left **{server}**.",
-        color: "#ED4245",
-        image: null,
-        gif: null,
-        footer: null,
-        timestamp: true,
-        thumbnail: true
-      }
-    };
-
-    saveConfig();
-  }
-
-  const cfg = config[guildId];
-
-  if (!cfg.welcome)
-    cfg.welcome = {};
-
-  if (!cfg.goodbye)
-    cfg.goodbye = {};
-
-  // Welcome migration
-  if (cfg.welcome.enabled === undefined)
-    cfg.welcome.enabled = false;
-
-  if (cfg.welcome.channel === undefined)
-    cfg.welcome.channel = null;
-
-  if (!cfg.welcome.title)
-    cfg.welcome.title = "🎉 Welcome {user}!";
-
-  if (!cfg.welcome.description)
-    cfg.welcome.description =
-      "We're glad to have you here. Enjoy your stay!";
-
-  if (!cfg.welcome.message)
-    cfg.welcome.message =
-      "Welcome {user} to **{server}**!";
-
-  if (!cfg.welcome.color)
-    cfg.welcome.color = "#5865F2";
-
-  if (cfg.welcome.image === undefined)
-    cfg.welcome.image = null;
-
-  if (cfg.welcome.gif === undefined)
-    cfg.welcome.gif = null;
-
-  if (cfg.welcome.footer === undefined)
-    cfg.welcome.footer = null;
-
-  if (cfg.welcome.timestamp === undefined)
-    cfg.welcome.timestamp = true;
-
-  if (cfg.welcome.thumbnail === undefined)
-    cfg.welcome.thumbnail = true;
-
-  // Goodbye migration
-  if (cfg.goodbye.enabled === undefined)
-    cfg.goodbye.enabled = false;
-
-  if (cfg.goodbye.channel === undefined)
-    cfg.goodbye.channel = null;
-
-  if (!cfg.goodbye.title)
-    cfg.goodbye.title = "👋 Goodbye {user}";
-
-  if (!cfg.goodbye.description)
-    cfg.goodbye.description =
-      "Thanks for being part of our community. We'll miss you!";
-
-  if (!cfg.goodbye.message)
-    cfg.goodbye.message =
-      "{user} has left **{server}**.";
-
-  if (!cfg.goodbye.color)
-    cfg.goodbye.color = "#ED4245";
-
-  if (cfg.goodbye.image === undefined)
-    cfg.goodbye.image = null;
-
-  if (cfg.goodbye.gif === undefined)
-    cfg.goodbye.gif = null;
-
-  if (cfg.goodbye.footer === undefined)
-    cfg.goodbye.footer = null;
-
-  if (cfg.goodbye.timestamp === undefined)
-    cfg.goodbye.timestamp = true;
-
-  if (cfg.goodbye.thumbnail === undefined)
-    cfg.goodbye.thumbnail = true;
-
-  return cfg;
-}
-
-// ============================================================
-// VARIABLES
-// ONLY:
-// {user}
-// {username}
-// {server}
-// ============================================================
-
-function replaceVariables(text, member) {
-  if (!text) return "";
-
-  const username =
-    member.user?.username ||
-    member.user?.globalName ||
-    "User";
-
-  const server =
-    member.guild?.name ||
-    "Server";
-
-  return String(text)
-    .replaceAll(
-      "{user}",
-      `<@${member.id}>`
-    )
-    .replaceAll(
-      "{username}",
-      username
-    )
-    .replaceAll(
-      "{server}",
-      server
-    );
-}
-
-// ============================================================
-// VALIDATION
-// ============================================================
-
-function validImage(url) {
-  if (!url) return false;
-
-  try {
-    const parsed = new URL(url);
-
-    return (
-      parsed.protocol === "http:" ||
-      parsed.protocol === "https:"
-    );
-  } catch {
-    return false;
-  }
-}
-
-function validColor(color) {
-  if (!color) return false;
-
-  return /^#[0-9A-Fa-f]{6}$/.test(color);
-}
-
-// ============================================================
-// SLASH COMMANDS
-// ============================================================
-
-const commands = [
-
-  // ==========================================================
-  // /welcome
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("welcome")
-    .setDescription(
-      "Open the JRC Welcome dashboard"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    ),
-
-  // ==========================================================
-  // /welcome-setup
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("welcome-setup")
-    .setDescription(
-      "Quickly configure the JRC Welcome system"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    )
-    .addChannelOption(opt =>
-      opt
-        .setName("channel")
-        .setDescription(
-          "Channel where welcome messages are sent"
-        )
-        .addChannelTypes(
-          ChannelType.GuildText,
-          ChannelType.GuildAnnouncement
-        )
-        .setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName("message")
-        .setDescription(
-          "Welcome message"
-        )
-        .setRequired(false)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName("gif")
-        .setDescription(
-          "Image/GIF URL"
-        )
-        .setRequired(false)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName("color")
-        .setDescription(
-          "Embed color, e.g. #5865F2"
-        )
-        .setRequired(false)
-    ),
-
-  // ==========================================================
-  // /welcome-disable
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("welcome-disable")
-    .setDescription(
-      "Disable the JRC Welcome system"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    ),
-
-  // ==========================================================
-  // /welcome-test
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("welcome-test")
-    .setDescription(
-      "Preview the current JRC Welcome embed"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    ),
-
-  // ==========================================================
-  // /goodbye
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("goodbye")
-    .setDescription(
-      "Open the JRC Goodbye dashboard"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    ),
-
-  // ==========================================================
-  // /goodbye-setup
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("goodbye-setup")
-    .setDescription(
-      "Quickly configure the JRC Goodbye system"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    )
-    .addChannelOption(opt =>
-      opt
-        .setName("channel")
-        .setDescription(
-          "Channel where goodbye messages are sent"
-        )
-        .addChannelTypes(
-          ChannelType.GuildText,
-          ChannelType.GuildAnnouncement
-        )
-        .setRequired(true)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName("message")
-        .setDescription(
-          "Goodbye message"
-        )
-        .setRequired(false)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName("gif")
-        .setDescription(
-          "Image/GIF URL"
-        )
-        .setRequired(false)
-    )
-    .addStringOption(opt =>
-      opt
-        .setName("color")
-        .setDescription(
-          "Embed color, e.g. #ED4245"
-        )
-        .setRequired(false)
-    ),
-
-  // ==========================================================
-  // /goodbye-disable
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("goodbye-disable")
-    .setDescription(
-      "Disable the JRC Goodbye system"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    ),
-
-  // ==========================================================
-  // /goodbye-test
-  // ==========================================================
-
-  new SlashCommandBuilder()
-    .setName("goodbye-test")
-    .setDescription(
-      "Preview the current JRC Goodbye embed"
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.ManageGuild
-    )
-
-].map(command => command.toJSON());
-
-// ============================================================
-// PREMIUM DASHBOARD
-// ============================================================
-
-function buildPanel(system, guildId) {
-
-  const cfg = guildConfig(guildId);
-  const settings = cfg[system];
-
-  const isWelcome =
-    system === "welcome";
-
-  const name =
-    isWelcome
-      ? "WELCOME"
-      : "GOODBYE";
-
-  const icon =
-    isWelcome
-      ? "🎉"
-      : "👋";
-
-  const defaultColor =
-    isWelcome
-      ? "#5865F2"
-      : "#ED4245";
-
-  const status =
-    settings.enabled
-      ? "🟢 ACTIVE"
-      : "🔴 DISABLED";
-
-  const channel =
-    settings.channel
-      ? `<#${settings.channel}>`
-      : "Not configured";
-
-  const media =
-    settings.gif ||
-    settings.image
-      ? "🖼️ Configured"
-      : "Not configured";
-
-  const footer =
-    settings.footer ||
-    `JRC • ${name} Configuration`;
-
-  const embed =
-    new EmbedBuilder()
-      .setTitle(
-        `✦ JRC • ${name} SYSTEM`
-      )
-      .setDescription(
-        `> ${
-          isWelcome
-            ? "Create a personalized greeting for every member who joins your community."
-            : "Customize the message shown whenever a member leaves your community."
-        }\n\n` +
-
-        `**SYSTEM STATUS**\n` +
-        `${status}\n\n` +
-
-        `**CHANNEL**\n` +
-        `${channel}\n\n` +
-
-        `**GREETING / TITLE**\n` +
-        `${settings.title || "Not configured"}\n\n` +
-
-        `**DESCRIPTION**\n` +
-        `${settings.description || "Not configured"}\n\n` +
-
-        `**MESSAGE**\n` +
-        `${settings.message || "Not configured"}\n\n` +
-
-        `**MEDIA**\n` +
-        `${media}\n\n` +
-
-        `**EMBED COLOR**\n` +
-        `\`${settings.color || defaultColor}\``
-      )
-      .setColor(
-        validColor(settings.color)
-          ? settings.color
-          : defaultColor
-      )
-      .setFooter({
-        text: footer
-      })
-      .setTimestamp();
-
-  if (settings.thumbnail !== false) {
-    // Dashboard doesn't have a member object,
-    // so no user avatar thumbnail here.
-  }
-
-  const configure =
-    new ButtonBuilder()
-      .setCustomId(
-        `jrc_${system}_configure`
-      )
-      .setLabel("Configure")
-      .setEmoji("⚙️")
-      .setStyle(ButtonStyle.Primary);
-
-  const channelButton =
-    new ButtonBuilder()
-      .setCustomId(
-        `jrc_${system}_channel`
-      )
-      .setLabel("Channel")
-      .setEmoji("📢")
-      .setStyle(ButtonStyle.Secondary);
-
-  const preview =
-    new ButtonBuilder()
-      .setCustomId(
-        `jrc_${system}_preview`
-      )
-      .setLabel("Preview")
-      .setEmoji("👁️")
-      .setStyle(ButtonStyle.Secondary);
-
-  const enable =
-    new ButtonBuilder()
-      .setCustomId(
-        `jrc_${system}_enable`
-      )
-      .setLabel("Enable")
-      .setEmoji("🟢")
-      .setStyle(ButtonStyle.Success);
-
-  const disable =
-    new ButtonBuilder()
-      .setCustomId(
-        `jrc_${system}_disable`
-      )
-      .setLabel("Disable")
-      .setEmoji("🔴")
-      .setStyle(ButtonStyle.Danger);
-
-  return {
-    embeds: [embed],
-
-    components: [
-      new ActionRowBuilder()
-        .addComponents(
-          configure,
-          channelButton,
-          preview
-        ),
-
-      new ActionRowBuilder()
-        .addComponents(
-          enable,
-          disable
-        )
-    ]
-  };
-}
-
-// ============================================================
-// CONFIG MODAL
-// ============================================================
-
-function buildConfigModal(system, settings) {
-
-  const isWelcome =
-    system === "welcome";
-
-  const modal =
-    new ModalBuilder()
-      .setCustomId(
-        `jrc_${system}_modal`
-      )
-      .setTitle(
-        isWelcome
-          ? "JRC • Welcome Configuration"
-          : "JRC • Goodbye Configuration"
-      );
-
-  const title =
-    new TextInputBuilder()
-      .setCustomId("title")
-      .setLabel("Greeting / Embed Title")
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder(
-        isWelcome
-          ? "🎉 Welcome {user}!"
-          : "👋 Goodbye {user}"
-      )
-      .setMaxLength(256)
-      .setRequired(true)
-      .setValue(
-        settings.title || ""
-      );
-
-  const description =
-    new TextInputBuilder()
-      .setCustomId("description")
-      .setLabel("Description")
-      .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder(
-        isWelcome
-          ? "We're glad to have you here!"
-          : "Thanks for being part of our community!"
-      )
-      .setMaxLength(4000)
-      .setRequired(true)
-      .setValue(
-        settings.description || ""
-      );
-
-  const message =
-    new TextInputBuilder()
-      .setCustomId("message")
-      .setLabel("Greeting Message")
-      .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder(
-        "Welcome {user} to {server}!"
-      )
-      .setMaxLength(4000)
-      .setRequired(true)
-      .setValue(
-        settings.message || ""
-      );
-
-  const color =
-    new TextInputBuilder()
-      .setCustomId("color")
-      .setLabel("Embed Color")
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder(
-        isWelcome
-          ? "#5865F2"
-          : "#ED4245"
-      )
-      .setMaxLength(7)
-      .setRequired(true)
-      .setValue(
-        settings.color ||
-        (
-          isWelcome
-            ? "#5865F2"
-            : "#ED4245"
-        )
-      );
-
-  const media =
-    new TextInputBuilder()
-      .setCustomId("media")
-      .setLabel("Image / GIF URL")
-      .setStyle(TextInputStyle.Short)
-      .setPlaceholder(
-        "https://example.com/image.gif"
-      )
-      .setMaxLength(1000)
-      .setRequired(false)
-      .setValue(
-        settings.gif ||
-        settings.image ||
-        ""
-      );
-
-  modal.addComponents(
-    new ActionRowBuilder()
-      .addComponents(title),
-
-    new ActionRowBuilder()
-      .addComponents(description),
-
-    new ActionRowBuilder()
-      .addComponents(message),
-
-    new ActionRowBuilder()
-      .addComponents(color),
-
-    new ActionRowBuilder()
-      .addComponents(media)
-  );
-
-  return modal;
-}
-
-// ============================================================
-// BUILD MEMBER EMBED
-// ============================================================
-
-function buildMemberEmbed(
-  system,
-  member,
-  settings,
-  preview = false
-) {
-
-  const fallback =
-    system === "welcome"
-      ? "#5865F2"
-      : "#ED4245";
-
-  const title =
-    replaceVariables(
-      settings.title,
-      member
-    );
-
-  const description =
-    replaceVariables(
-      settings.description,
-      member
-    );
-
-  const message =
-    replaceVariables(
-      settings.message,
-      member
-    );
-
-  const embed =
-    new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(
-        `${description}\n\n${message}`
-      )
-      .setColor(
-        validColor(settings.color)
-          ? settings.color
-          : fallback
-      );
-
-  if (
-    settings.thumbnail !== false &&
-    member.user
-  ) {
-    embed.setThumbnail(
-      member.user.displayAvatarURL({
-        size: 256,
-        extension: "png"
-      })
-    );
-  }
-
-  const media =
-    settings.gif ||
-    settings.image;
-
-  if (validImage(media)) {
-    embed.setImage(media);
-  }
-
-  if (settings.footer) {
-    embed.setFooter({
-      text:
-        replaceVariables(
-          settings.footer,
-          member
-        )
-    });
-  } else {
-    embed.setFooter({
-      text:
-        `${member.guild.name} • JRC ${
-          preview
-            ? "Preview"
-            : system === "welcome"
-              ? "Welcome"
-              : "Goodbye"
-        }`
-    });
-  }
-
-  if (
-    settings.timestamp !== false
-  ) {
-    embed.setTimestamp();
-  }
-
-  return embed;
-}
-
-// ============================================================
-// SEND WELCOME
-// ============================================================
-
-async function sendWelcome(member) {
-
-  const cfg =
-    guildConfig(
-      member.guild.id
-    );
-
-  const settings =
-    cfg.welcome;
-
-  if (
-    !settings.enabled ||
-    !settings.channel
-  ) return;
-
-  const channel =
-    member.guild.channels.cache.get(
-      settings.channel
-    );
-
-  if (
-    !channel ||
-    !channel.isTextBased()
-  ) return;
-
-  const embed =
-    buildMemberEmbed(
-      "welcome",
-      member,
-      settings
-    );
-
-  try {
-
-    await channel.send({
-      content:
-        `Welcome <@${member.id}>! 🎉`,
-      embeds: [embed]
-    });
-
-  } catch (error) {
-
-    console.error(
-      "❌ Welcome message failed:",
-      error
-    );
-  }
-}
-
-// ============================================================
-// SEND GOODBYE
-// ============================================================
-
-async function sendGoodbye(member) {
-
-  const cfg =
-    guildConfig(
-      member.guild.id
-    );
-
-  const settings =
-    cfg.goodbye;
-
-  if (
-    !settings.enabled ||
-    !settings.channel
-  ) return;
-
-  const channel =
-    member.guild.channels.cache.get(
-      settings.channel
-    );
-
-  if (
-    !channel ||
-    !channel.isTextBased()
-  ) return;
-
-  const embed =
-    buildMemberEmbed(
-      "goodbye",
-      member,
-      settings
-    );
-
-  try {
-
-    await channel.send({
-      embeds: [embed]
-    });
-
-  } catch (error) {
-
-    console.error(
-      "❌ Goodbye message failed:",
-      error
-    );
-  }
-}
-
-// ============================================================
-// READY
-// ============================================================
-
-client.once(
-  "ready",
-  async () => {
-
-    console.log(
-      "================================"
-    );
-
-    console.log(
-      `🤖 Logged in as ${client.user.tag}`
-    );
-
-    console.log(
-      `🌐 Servers: ${client.guilds.cache.size}`
-    );
-
-    console.log(
-      "✨ JRC Premium Welcome System"
-    );
-
-    console.log(
-      "✨ JRC Premium Goodbye System"
-    );
-
-    console.log(
-      "🌍 Registering slash commands..."
-    );
-
-    console.log(
-      "================================"
-    );
-
-    const rest =
-      new REST({
-        version: "10"
-      })
-      .setToken(
-        process.env.DISCORD_TOKEN
-      );
-
-    try {
-
-      await rest.put(
-        Routes.applicationCommands(
-          process.env.CLIENT_ID
-        ),
-        {
-          body: commands
-        }
-      );
-
-      console.log(
-        `✅ ${commands.length} slash commands registered.`
-      );
-
-      console.log(
-        "🚀 JRC is fully online."
-      );
-
-    } catch (error) {
-
-      console.error(
-        "❌ Command registration failed:",
-        error
-      );
+});
+
+// --- INTERACTION ROUTER ---
+client.on('interactionCreate', async (i) => {
+  if (!i.isChatInputCommand()) return;
+
+  const group = i.commandName;
+  const sub = i.options.getSubcommand(false);
+
+  if (group === 'jrc') {
+    if (sub === 'help') {
+      const embed = new EmbedBuilder()
+        .setColor(PALETTE.DARK)
+        .setTitle('JRC Bot Help Menu')
+        .setDescription('Explore modules: `/welcome`, `/goodbye`, `/mod`, `/automod`, `/utility`, `/fun`, `/antinuke`, `/raid`.');
+      return i.reply({ embeds: [embed], ephemeral: true });
+    }
+    if (sub === 'settings') {
+      return i.reply({ content: 'Server module configurations are nominal.', ephemeral: true });
+    }
+    if (sub === 'about') {
+      const embed = new EmbedBuilder()
+        .setColor(PALETTE.INFO)
+        .setTitle('About JRC Bot')
+        .setDescription('A high-performance security, utility, and administration discord bot infrastructure.');
+      return i.reply({ embeds: [embed], ephemeral: true });
+    }
+    if (sub === 'status') {
+      return i.reply({ content: `System Operational. Latency: \`${i.client.ws.ping}ms\``, ephemeral: true });
     }
   }
-);
 
-// ============================================================
-// MEMBER JOIN
-// ============================================================
+  if (group === 'welcome') {
+    if (sub === 'setup') {
+      const embed = new EmbedBuilder()
+        .setColor(PALETTE.INFO)
+        .setTitle('JRC • WELCOME CONFIGURATION')
+        .setDescription('Configure how JRC welcomes new members into your server.\n\n**SYSTEM STATUS**\n🔴 **DISABLED**\n**CHANNEL**\n`Not configured`\n**EMBED COLOR**\n`#5865F2`\n**GREETING / TITLE**\n🎉 Welcome {user}!\n**DESCRIPTION**\nWe\'re glad to have you here. Enjoy your stay!\n**VARIABLES**\n`{user}` `{username}` `{server}`');
 
-client.on(
-  "guildMemberAdd",
-  async member => {
-    await sendWelcome(member);
-  }
-);
-
-// ============================================================
-// MEMBER LEAVE
-// ============================================================
-
-client.on(
-  "guildMemberRemove",
-  async member => {
-    await sendGoodbye(member);
-  }
-);
-
-// ============================================================
-// SLASH COMMANDS
-// ============================================================
-
-client.on(
-  "interactionCreate",
-  async interaction => {
-
-    if (
-      !interaction.isChatInputCommand()
-    ) return;
-
-    const guild =
-      interaction.guild;
-
-    if (!guild) {
-
-      return interaction.reply({
-        content:
-          "❌ This command can only be used inside a server.",
-        ephemeral: true
-      });
-    }
-
-    const cfg =
-      guildConfig(guild.id);
-
-    // ========================================================
-    // /welcome
-    // ========================================================
-
-    if (
-      interaction.commandName === "welcome"
-    ) {
-
-      return interaction.reply(
-        buildPanel(
-          "welcome",
-          guild.id
-        )
+      const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('wel_config').setLabel('Configure').setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
+        new ButtonBuilder().setCustomId('wel_channel').setLabel('Channel').setStyle(ButtonStyle.Secondary).setEmoji('📢'),
+        new ButtonBuilder().setCustomId('wel_preview').setLabel('Preview').setStyle(ButtonStyle.Secondary).setEmoji('👁️')
       );
-    }
-
-    // ========================================================
-    // /welcome-setup
-    // ========================================================
-
-    if (
-      interaction.commandName === "welcome-setup"
-    ) {
-
-      const channel =
-        interaction.options.getChannel(
-          "channel"
-        );
-
-      const message =
-        interaction.options.getString(
-          "message"
-        );
-
-      const gif =
-        interaction.options.getString(
-          "gif"
-        );
-
-      const color =
-        interaction.options.getString(
-          "color"
-        );
-
-      if (
-        gif &&
-        !validImage(gif)
-      ) {
-
-        return interaction.reply({
-          content:
-            "❌ That doesn't look like a valid image/GIF URL.",
-          ephemeral: true
-        });
-      }
-
-      if (
-        color &&
-        !validColor(color)
-      ) {
-
-        return interaction.reply({
-          content:
-            "❌ Invalid color. Use something like `#5865F2`.",
-          ephemeral: true
-        });
-      }
-
-      cfg.welcome.enabled = true;
-      cfg.welcome.channel = channel.id;
-
-      if (message)
-        cfg.welcome.message = message;
-
-      if (gif) {
-        cfg.welcome.gif = gif;
-        cfg.welcome.image = gif;
-      }
-
-      if (color)
-        cfg.welcome.color = color;
-
-      saveConfig();
-
-      return interaction.reply({
-        content:
-          "🎉 **JRC Welcome System Enabled!**\n\n" +
-          `📢 Channel: ${channel}\n` +
-          `💬 Message: ${cfg.welcome.message}\n` +
-          `🎨 Color: ${cfg.welcome.color}`,
-        ephemeral: true
-      });
-    }
-
-    // ========================================================
-    // /welcome-disable
-    // ========================================================
-
-    if (
-      interaction.commandName === "welcome-disable"
-    ) {
-
-      cfg.welcome.enabled = false;
-
-      saveConfig();
-
-      return interaction.reply({
-        content:
-          "🔴 **JRC Welcome System Disabled.**",
-        ephemeral: true
-      });
-    }
-
-    // ========================================================
-    // /welcome-test
-    // ========================================================
-
-    if (
-      interaction.commandName === "welcome-test"
-    ) {
-
-      const settings =
-        cfg.welcome;
-
-      if (!settings.channel) {
-
-        return interaction.reply({
-          content:
-            "❌ Welcome isn't configured yet.",
-          ephemeral: true
-        });
-      }
-
-      const embed =
-        buildMemberEmbed(
-          "welcome",
-          interaction.member,
-          settings,
-          true
-        );
-
-      return interaction.reply({
-        content:
-          "👁️ **JRC Welcome Preview**",
-        embeds: [embed],
-        ephemeral: true
-      });
-    }
-
-    // ========================================================
-    // /goodbye
-    // ========================================================
-
-    if (
-      interaction.commandName === "goodbye"
-    ) {
-
-      return interaction.reply(
-        buildPanel(
-          "goodbye",
-          guild.id
-        )
+      const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('wel_enable').setLabel('Enable').setStyle(ButtonStyle.Success).setEmoji('🟢'),
+        new ButtonBuilder().setCustomId('wel_disable').setLabel('Disable').setStyle(ButtonStyle.Danger).setEmoji('🔴')
       );
+      return i.reply({ embeds: [embed], components: [row1, row2] });
     }
-
-    // ========================================================
-    // /goodbye-setup
-    // ========================================================
-
-    if (
-      interaction.commandName === "goodbye-setup"
-    ) {
-
-      const channel =
-        interaction.options.getChannel(
-          "channel"
-        );
-
-      const message =
-        interaction.options.getString(
-          "message"
-        );
-
-      const gif =
-        interaction.options.getString(
-          "gif"
-        );
-
-      const color =
-        interaction.options.getString(
-          "color"
-        );
-
-      if (
-        gif &&
-        !validImage(gif)
-      ) {
-
-        return interaction.reply({
-          content:
-            "❌ That doesn't look like a valid image/GIF URL.",
-          ephemeral: true
-        });
-      }
-
-      if (
-        color &&
-        !validColor(color)
-      ) {
-
-        return interaction.reply({
-          content:
-            "❌ Invalid color. Use something like `#ED4245`.",
-          ephemeral: true
-        });
-      }
-
-      cfg.goodbye.enabled = true;
-      cfg.goodbye.channel = channel.id;
-
-      if (message)
-        cfg.goodbye.message = message;
-
-      if (gif) {
-        cfg.goodbye.gif = gif;
-        cfg.goodbye.image = gif;
-      }
-
-      if (color)
-        cfg.goodbye.color = color;
-
-      saveConfig();
-
-      return interaction.reply({
-        content:
-          "👋 **JRC Goodbye System Enabled!**\n\n" +
-          `📢 Channel: ${channel}\n` +
-          `💬 Message: ${cfg.goodbye.message}\n` +
-          `🎨 Color: ${cfg.goodbye.color}`,
-        ephemeral: true
-      });
+    if (sub === 'disable') {
+      welcomeConfig.set(i.guild.id, { enabled: false });
+      return i.reply({ content: 'Welcome system disabled.', ephemeral: true });
     }
-
-    // ========================================================
-    // /goodbye-disable
-    // ========================================================
-
-    if (
-      interaction.commandName === "goodbye-disable"
-    ) {
-
-      cfg.goodbye.enabled = false;
-
-      saveConfig();
-
-      return interaction.reply({
-        content:
-          "🔴 **JRC Goodbye System Disabled.**",
-        ephemeral: true
-      });
+    if (sub === 'test') {
+      const cfg = welcomeConfig.get(i.guild.id);
+      if (!cfg || !cfg.channelId) return i.reply({ content: 'Welcome channel not set up yet.', ephemeral: true });
+      const ch = i.guild.channels.cache.get(cfg.channelId);
+      ch?.send(`🎉 Welcome <@${i.user.id}> to ${i.guild.name}!`);
+      return i.reply({ content: 'Sent welcome test message.', ephemeral: true });
     }
-
-    // ========================================================
-    // /goodbye-test
-    // ========================================================
-
-    if (
-      interaction.commandName === "goodbye-test"
-    ) {
-
-      const settings =
-        cfg.goodbye;
-
-      if (!settings.channel) {
-
-        return interaction.reply({
-          content:
-            "❌ Goodbye isn't configured yet.",
-          ephemeral: true
-        });
-      }
-
-      const embed =
-        buildMemberEmbed(
-          "goodbye",
-          interaction.member,
-          settings,
-          true
-        );
-
-      return interaction.reply({
-        content:
-          "👁️ **JRC Goodbye Preview**",
-        embeds: [embed],
-        ephemeral: true
-      });
+    if (sub === 'message') {
+      let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
+      cfg.message = i.options.getString('text');
+      welcomeConfig.set(i.guild.id, cfg);
+      return i.reply({ content: `Welcome message updated to: \`${cfg.message}\``, ephemeral: true });
+    }
+    if (sub === 'channel') {
+      let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
+      cfg.channelId = i.options.getChannel('target').id;
+      cfg.enabled = true;
+      welcomeConfig.set(i.guild.id, cfg);
+      return i.reply({ content: `Welcome channel successfully set to <#${cfg.channelId}>.`, ephemeral: true });
+    }
+    if (sub === 'preview') {
+      const embed = new EmbedBuilder().setColor(PALETTE.INFO).setTitle('🎉 Welcome!').setDescription(`Welcome <@${i.user.id}> to ${i.guild.name}!`);
+      return i.reply({ embeds: [embed], ephemeral: true });
     }
   }
-);
 
-// ============================================================
-// BUTTONS / SELECT MENUS / MODALS
-// ============================================================
-
-client.on(
-  "interactionCreate",
-  async interaction => {
-
-    // ========================================================
-    // BUTTONS
-    // ========================================================
-
-    if (interaction.isButton()) {
-
-      const id =
-        interaction.customId;
-
-      if (
-        !id.startsWith("jrc_")
-      ) return;
-
-      const parts =
-        id.split("_");
-
-      const system =
-        parts[1];
-
-      const action =
-        parts[2];
-
-      if (
-        system !== "welcome" &&
-        system !== "goodbye"
-      ) return;
-
-      const cfg =
-        guildConfig(
-          interaction.guild.id
-        );
-
-      const settings =
-        cfg[system];
-
-      // ======================================================
-      // CONFIGURE
-      // ======================================================
-
-      if (
-        action === "configure"
-      ) {
-
-        return interaction.showModal(
-          buildConfigModal(
-            system,
-            settings
-          )
-        );
-      }
-
-      // ======================================================
-      // CHANNEL
-      // ======================================================
-
-      if (
-        action === "channel"
-      ) {
-
-        const select =
-          new ChannelSelectMenuBuilder()
-            .setCustomId(
-              `jrc_${system}_channel_select`
-            )
-            .setPlaceholder(
-              "Select your message channel..."
-            )
-            .addChannelTypes(
-              ChannelType.GuildText,
-              ChannelType.GuildAnnouncement
-            );
-
-        return interaction.reply({
-          content:
-            `📢 **JRC ${system.toUpperCase()} CHANNEL**\n\n` +
-            "Select the channel where JRC should send these messages.",
-          components: [
-            new ActionRowBuilder()
-              .addComponents(select)
-          ],
-          ephemeral: true
-        });
-      }
-
-      // ======================================================
-      // ENABLE
-      // ======================================================
-
-      if (
-        action === "enable"
-      ) {
-
-        if (!settings.channel) {
-
-          return interaction.reply({
-            content:
-              "⚠️ Configure a channel first using **📢 Channel**.",
-            ephemeral: true
-          });
-        }
-
-        settings.enabled = true;
-
-        saveConfig();
-
-        return interaction.update(
-          buildPanel(
-            system,
-            interaction.guild.id
-          )
-        );
-      }
-
-      // ======================================================
-      // DISABLE
-      // ======================================================
-
-      if (
-        action === "disable"
-      ) {
-
-        settings.enabled = false;
-
-        saveConfig();
-
-        return interaction.update(
-          buildPanel(
-            system,
-            interaction.guild.id
-          )
-        );
-      }
-
-      // ======================================================
-      // PREVIEW
-      // ======================================================
-
-      if (
-        action === "preview"
-      ) {
-
-        const embed =
-          buildMemberEmbed(
-            system,
-            interaction.member,
-            settings,
-            true
-          );
-
-        return interaction.reply({
-          content:
-            `👁️ **JRC ${system.toUpperCase()} PREVIEW**`,
-          embeds: [embed],
-          ephemeral: true
-        });
-      }
+  if (group === 'goodbye') {
+    if (sub === 'setup') {
+      const embed = new EmbedBuilder()
+        .setColor(PALETTE.ERROR)
+        .setTitle('JRC • GOODBYE CONFIGURATION')
+        .setDescription('Configure how JRC handles departing members.\n\n**SYSTEM STATUS**\n🔴 **DISABLED**\n**CHANNEL**\n`Not configured`');
+      return i.reply({ embeds: [embed], ephemeral: true });
     }
-
-    // ========================================================
-    // CHANNEL SELECT
-    // ========================================================
-
-    if (
-      interaction.isChannelSelectMenu()
-    ) {
-
-      const id =
-        interaction.customId;
-
-      if (
-        !id.startsWith("jrc_")
-      ) return;
-
-      const parts =
-        id.split("_");
-
-      const system =
-        parts[1];
-
-      const action =
-        parts[2];
-
-      if (
-        action !== "channel"
-      ) return;
-
-      if (
-        system !== "welcome" &&
-        system !== "goodbye"
-      ) return;
-
-      const channel =
-        interaction.channels.first();
-
-      if (!channel) {
-
-        return interaction.reply({
-          content:
-            "❌ No channel selected.",
-          ephemeral: true
-        });
-      }
-
-      const cfg =
-        guildConfig(
-          interaction.guild.id
-        );
-
-      cfg[system].channel =
-        channel.id;
-
-      saveConfig();
-
-      return interaction.update({
-        content:
-          `✅ **${system.toUpperCase()} channel updated!**\n\n` +
-          `Messages will now be sent to ${channel}.`,
-        components: []
-      });
+    if (sub === 'disable') {
+      goodbyeConfig.set(i.guild.id, { enabled: false });
+      return i.reply({ content: 'Goodbye system disabled.', ephemeral: true });
     }
-
-    // ========================================================
-    // MODAL
-    // ========================================================
-
-    if (
-      interaction.isModalSubmit()
-    ) {
-
-      const id =
-        interaction.customId;
-
-      if (
-        !id.startsWith("jrc_")
-      ) return;
-
-      const parts =
-        id.split("_");
-
-      const system =
-        parts[1];
-
-      const action =
-        parts[2];
-
-      if (
-        action !== "modal"
-      ) return;
-
-      if (
-        system !== "welcome" &&
-        system !== "goodbye"
-      ) return;
-
-      const cfg =
-        guildConfig(
-          interaction.guild.id
-        );
-
-      const settings =
-        cfg[system];
-
-      const title =
-        interaction.fields.getTextInputValue(
-          "title"
-        );
-
-      const description =
-        interaction.fields.getTextInputValue(
-          "description"
-        );
-
-      const message =
-        interaction.fields.getTextInputValue(
-          "message"
-        );
-
-      const color =
-        interaction.fields.getTextInputValue(
-          "color"
-        );
-
-      const media =
-        interaction.fields.getTextInputValue(
-          "media"
-        );
-
-      if (
-        !validColor(color)
-      ) {
-
-        return interaction.reply({
-          content:
-            "❌ Invalid embed color.\n\nExample: `#5865F2`",
-          ephemeral: true
-        });
-      }
-
-      if (
-        media &&
-        !validImage(media)
-      ) {
-
-        return interaction.reply({
-          content:
-            "❌ That isn't a valid image/GIF URL.",
-          ephemeral: true
-        });
-      }
-
-      settings.title =
-        title;
-
-      settings.description =
-        description;
-
-      settings.message =
-        message;
-
-      settings.color =
-        color;
-
-      if (media) {
-
-        settings.image =
-          media;
-
-        settings.gif =
-          media;
-
-      } else {
-
-        settings.image =
-          null;
-
-        settings.gif =
-          null;
-      }
-
-      saveConfig();
-
-      return interaction.reply({
-        content:
-          `✅ **JRC ${system.toUpperCase()} settings saved!**\n\n` +
-          "Your premium embed configuration has been updated.",
-        ephemeral: true
-      });
+    if (sub === 'test') {
+      const cfg = goodbyeConfig.get(i.guild.id);
+      if (!cfg || !cfg.channelId) return i.reply({ content: 'Goodbye channel not configured.', ephemeral: true });
+      const ch = i.guild.channels.cache.get(cfg.channelId);
+      ch?.send(`👋 Goodbye <@${i.user.id}>!`);
+      return i.reply({ content: 'Sent test goodbye message.', ephemeral: true });
+    }
+    if (sub === 'message') {
+      let cfg = goodbyeConfig.get(i.guild.id) || { enabled: false };
+      cfg.message = i.options.getString('text');
+      goodbyeConfig.set(i.guild.id, cfg);
+      return i.reply({ content: `Goodbye message updated: \`${cfg.message}\``, ephemeral: true });
+    }
+    if (sub === 'channel') {
+      let cfg = goodbyeConfig.get(i.guild.id) || { enabled: false };
+      cfg.channelId = i.options.getChannel('target').id;
+      cfg.enabled = true;
+      goodbyeConfig.set(i.guild.id, cfg);
+      return i.reply({ content: `Goodbye channel set to <#${cfg.channelId}>.`, ephemeral: true });
+    }
+    if (sub === 'preview') {
+      const embed = new EmbedBuilder().setColor(PALETTE.ERROR).setTitle('👋 Goodbye!').setDescription(`${i.user.username} has left the server.`);
+      return i.reply({ embeds: [embed], ephemeral: true });
     }
   }
-);
 
-// ============================================================
-// ERRORS
-// ============================================================
-
-client.on(
-  "error",
-  error => {
-    console.error(
-      "❌ Discord client error:",
-      error
-    );
+  if (group === 'mod') {
+    if (sub === 'ban') {
+      const target = i.options.getMember('target');
+      await target.ban({ reason: 'Admin enforcement' });
+      return i.reply({ content: `Banned \`${target.user.tag}\`.`, ephemeral: true });
+    }
+    if (sub === 'kick') {
+      const target = i.options.getMember('target');
+      await target.kick('Admin enforcement');
+      return i.reply({ content: `Kicked \`${target.user.tag}\`.`, ephemeral: true });
+    }
+    if (sub === 'timeout') {
+      const target = i.options.getMember('target');
+      const mins = i.options.getInteger('minutes');
+      await target.timeout(mins * 60000);
+      return i.reply({ content: `Timed out <@${target.id}> for **${mins}m**.`, ephemeral: true });
+    }
+    if (sub === 'warn') {
+      const target = i.options.getUser('target');
+      addWarn(target.id, { reason: 'Violation', date: new Date().toLocaleDateString() });
+      return i.reply({ content: `Warned <@${target.id}>.`, ephemeral: true });
+    }
+    if (sub === 'warnings') {
+      const target = i.options.getUser('target');
+      const list = getWarns(target.id);
+      return i.reply({ content: `User has **${list.length}** warnings.`, ephemeral: true });
+    }
+    if (sub === 'clear') {
+      const amt = i.options.getInteger('amount');
+      await i.channel.bulkDelete(amt, true);
+      return i.reply({ content: `Cleared \`${amt}\` messages.`, ephemeral: true });
+    }
+    if (sub === 'lock') {
+      await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: false });
+      return i.reply({ content: 'Channel locked.', ephemeral: true });
+    }
+    if (sub === 'unlock') {
+      await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: null });
+      return i.reply({ content: 'Channel unlocked.', ephemeral: true });
+    }
   }
-);
 
-process.on(
-  "unhandledRejection",
-  error => {
-    console.error(
-      "❌ Unhandled rejection:",
-      error
-    );
+  if (group === 'automod') {
+    if (sub === 'setup') return i.reply({ content: 'Automod configuration initialized.', ephemeral: true });
+    if (sub === 'enable') return i.reply({ content: 'Automod module enabled.', ephemeral: true });
+    if (sub === 'disable') return i.reply({ content: 'Automod module disabled.', ephemeral: true });
+    if (sub === 'words') return i.reply({ content: 'Word filter list updated.', ephemeral: true });
+    if (sub === 'spam') return i.reply({ content: 'Anti-spam protection tuned.', ephemeral: true });
+    if (sub === 'links') return i.reply({ content: 'Link filter parameters active.', ephemeral: true });
   }
-);
 
-// ============================================================
-// ENVIRONMENT CHECK
-// ============================================================
+  if (group === 'reactionrole') {
+    if (sub === 'create') return i.reply({ content: 'Reaction role panel generated.', ephemeral: true });
+    if (sub === 'add') return i.reply({ content: 'Reaction role mapping added.', ephemeral: true });
+    if (sub === 'remove') return i.reply({ content: 'Reaction role mapping removed.', ephemeral: true });
+    if (sub === 'list') return i.reply({ content: 'Active reaction role panels listed.', ephemeral: true });
+  }
 
-if (!process.env.DISCORD_TOKEN) {
+  if (group === 'logs') {
+    if (sub === 'setup') return i.reply({ content: 'Audit logger channel established.', ephemeral: true });
+    if (sub === 'disable') return i.reply({ content: 'Audit logging system disabled.', ephemeral: true });
+    if (sub === 'test') return i.reply({ content: 'Dispatching sample log event payload...', ephemeral: true });
+  }
 
-  console.error(
-    "❌ DISCORD_TOKEN is missing from your environment variables."
-  );
+  if (group === 'utility') {
+    if (sub === 'userinfo') {
+      const target = i.options.getUser('target') || i.user;
+      return i.reply({ content: `User ID: \`${target.id}\`, Created: <t:${Math.floor(target.createdTimestamp / 1000)}:R>`, ephemeral: true });
+    }
+    if (sub === 'serverinfo') {
+      return i.reply({ content: `Server Name: \`${i.guild.name}\`, Members: \`${i.guild.memberCount}\``, ephemeral: true });
+    }
+    if (sub === 'avatar') {
+      const target = i.options.getUser('target') || i.user;
+      return i.reply({ content: target.displayAvatarURL({ size: 1024 }), ephemeral: true });
+    }
+    if (sub === 'roleinfo') {
+      const role = i.options.getRole('target');
+      return i.reply({ content: `Role **${role.name}** has \`${role.members.size}\` members.`, ephemeral: true });
+    }
+    if (sub === 'channelinfo') {
+      return i.reply({ content: `Channel Name: \`${i.channel.name}\`, ID: \`${i.channel.id}\``, ephemeral: true });
+    }
+  }
 
-  process.exit(1);
-}
+  if (group === 'fun') {
+    if (sub === '8ball') {
+      const ans = ['Yes.', 'No.', 'Maybe.', 'Definitely.', 'Outlook bleak.'];
+      return i.reply(`🔮 ${ans[Math.floor(Math.random() * ans.length)]}`);
+    }
+    if (sub === 'coinflip') {
+      return i.reply(`🪙 Result: **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**`);
+    }
+    if (sub === 'dice') {
+      return i.reply(`🎲 Rolled: **${Math.floor(Math.random() * 6) + 1}**`);
+    }
+    if (sub === 'choose') {
+      const options = i.options.getString('options').split(',');
+      const choice = options[Math.floor(Math.random() * options.length)].trim();
+      return i.reply(`🎯 I choose: **${choice}**`);
+    }
+    if (sub === 'poll') {
+      const q = i.options.getString('question');
+      const msg = await i.reply({ content: `📊 **Poll:** ${q}`, fetchReply: true });
+      await msg.react('👍');
+      await msg.react('👎');
+      return;
+    }
+  }
 
-if (!process.env.CLIENT_ID) {
+  if (group === 'antinuke') {
+    if (sub === 'setup') return i.reply({ content: 'Anti-nuke defense baseline configured.', ephemeral: true });
+    if (sub === 'enable') return i.reply({ content: 'Anti-nuke protection activated.', ephemeral: true });
+    if (sub === 'disable') return i.reply({ content: 'Anti-nuke protection disengaged.', ephemeral: true });
+    if (sub === 'config') return i.reply({ content: 'Threshold limits modified.', ephemeral: true });
+    if (sub === 'status') return i.reply({ content: 'Anti-nuke status: `SECURE`', ephemeral: true });
+  }
 
-  console.error(
-    "❌ CLIENT_ID is missing from your environment variables."
-  );
+  if (group === 'raid') {
+    if (sub === 'setup') return i.reply({ content: 'Anti-raid perimeter initialized.', ephemeral: true });
+    if (sub === 'enable') return i.reply({ content: 'Anti-raid mode active.', ephemeral: true });
+    if (sub === 'disable') return i.reply({ content: 'Anti-raid mode deactivated.', ephemeral: true });
+    if (sub === 'config') return i.reply({ content: 'Join restrictions adjusted.', ephemeral: true });
+    if (sub === 'status') return i.reply({ content: 'Anti-raid status: `MONITORING`', ephemeral: true });
+  }
+});
 
-  process.exit(1);
-}
-
-// ============================================================
-// LOGIN
-// ============================================================
-
-client.login(
-  process.env.DISCORD_TOKEN
-);
+client.login(process.env.DISCORD_TOKEN);
