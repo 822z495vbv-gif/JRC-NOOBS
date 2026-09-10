@@ -16,16 +16,17 @@ const {
   ChannelSelectMenuBuilder,
   ChannelType,
   AuditLogEvent,
-  MessageFlags,
-  PermissionsBitField
+  MessageFlags
 } = require("discord.js");
 
 const fs = require("fs");
 const path = require("path");
 
 /* =========================================================
-   JRC BOT — SINGLE FILE EDITION
-   Existing commands preserved + new systems added.
+   JRC BOT
+   CLEAN / STABLE EDITION
+   Welcome + Goodbye + Embeds + Roles + Mod Logs + Security
+   + Utility + Fun
    ========================================================= */
 
 const client = new Client({
@@ -33,21 +34,34 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildModeration
   ],
-  partials: [Partials.Channel, Partials.Message]
+  partials: [
+    Partials.Channel,
+    Partials.Message,
+    Partials.Reaction
+  ]
 });
 
 const CONFIG_FILE = path.join(__dirname, "config.json");
 const ACCENT = "#5865F2";
+const SUCCESS = "#57F287";
+const WARNING = "#FEE75C";
+const DANGER = "#ED4245";
 
 function loadConfig() {
   try {
-    if (!fs.existsSync(CONFIG_FILE))
+    if (!fs.existsSync(CONFIG_FILE)) {
       fs.writeFileSync(CONFIG_FILE, "{}", "utf8");
-    return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
-  } catch (e) {
-    console.error("Config load error:", e);
+    }
+
+    const raw = fs.readFileSync(CONFIG_FILE, "utf8").trim();
+    if (!raw) return {};
+
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error("Config load error:", error);
     return {};
   }
 }
@@ -61,8 +75,8 @@ function saveConfig() {
       JSON.stringify(config, null, 2),
       "utf8"
     );
-  } catch (e) {
-    console.error("Config save error:", e);
+  } catch (error) {
+    console.error("Config save error:", error);
   }
 }
 
@@ -73,58 +87,8 @@ function guildConfig(guildId) {
         enabled: false,
         channel: null,
         title: "👋 Welcome to {server}!",
-        description: `Welcome to {server}, {user}! 🎉
-
-We're glad to have you here. Before you start chatting, hanging out, or participating in the community, please take a moment to read and understand our server rules and Discord's Terms of Service.
-
-📖 SERVER RULES
-
-• Treat everyone with respect. Harassment, bullying, discrimination, and unnecessary drama are not tolerated.
-
-• Keep conversations appropriate and avoid disturbing, offensive, or excessively inappropriate content.
-
-• Do not spam messages, mentions, emojis, images, or commands.
-
-• Do not intentionally disrupt channels, voice chats, events, or other community activities.
-
-• Do not advertise or promote unrelated servers, services, websites, or social media without permission.
-
-• Do not share personal information about yourself or other people. Respect everyone's privacy.
-
-• Do not impersonate staff, moderators, bots, or other members.
-
-• Do not attempt to exploit, abuse, or interfere with Discord, the server, its bots, or its systems.
-
-• Use the correct channels for their intended purposes and follow any additional channel-specific rules.
-
-• Listen to moderators and staff when they are handling a situation. If you disagree with a moderation decision, discuss it respectfully through the proper channels.
-
-📜 DISCORD TERMS & GUIDELINES
-
-By participating in this server, you are also expected to follow Discord's Terms of Service and Community Guidelines.
-
-⚠️ IMPORTANT
-
-Being new to the server does not exempt anyone from the rules. Rules may be updated when necessary.
-
-🔒 YOUR PRIVACY
-
-Never share passwords, authentication codes, private addresses, financial information, or other sensitive personal information with other members.
-
-🆘 NEED HELP?
-
-If you're unsure whether something is allowed, ask a moderator before doing it.
-
-Most importantly, have fun, meet new people, and help keep {server} a welcoming and enjoyable community for everyone.
-
-Enjoy your stay, {user}! 💙`,
-        message: `🎉 Welcome to {server}, {user}!
-
-Before you get started, please read the server rules and make sure you understand Discord's Terms of Service and Community Guidelines.
-
-Respect others, protect your privacy, don't spam, don't advertise without permission, and follow staff instructions.
-
-Have fun, stay safe, and enjoy your time here! 💙`,
+        description: "Welcome to {server}, {user}! 🎉",
+        message: "We're glad to have you here. Enjoy your stay!",
         color: ACCENT,
         image: null,
         footer: "JRC Bot • Welcome",
@@ -136,10 +100,9 @@ Have fun, stay safe, and enjoy your time here! 💙`,
         enabled: false,
         channel: null,
         title: "👋 Goodbye from {server}",
-        description:
-          "We're sorry to see you go, {user}. Thanks for being part of {server}.",
-        message: "👋 {user} has left {server}. We wish you the best!",
-        color: "#ED4245",
+        description: "We're sorry to see you go, {user}.",
+        message: "Thanks for being part of the community!",
+        color: DANGER,
         image: null,
         footer: "JRC Bot • Goodbye",
         timestamp: true,
@@ -164,36 +127,26 @@ Have fun, stay safe, and enjoy your time here! 💙`,
         channel: null
       },
 
+      security: {
+        antiSpam: false,
+        antiLink: false,
+        antiRaid: false,
+        antiMention: false,
+        raidThreshold: 8,
+        raidInterval: 10000,
+        mentionLimit: 5
+      },
+
       reactionRoles: [],
 
-      antinuke: {
+      autoRole: {
         enabled: false,
-        threshold: 5,
-        interval: 10000
+        role: null
       },
 
-      raid: {
-        enabled: false,
-        threshold: 8,
-        interval: 10000,
-        action: "kick",
-        activeUntil: 0
-      },
+      embeds: {},
 
-      tickets: {
-        enabled: false,
-        category: null,
-        supportRole: null,
-        logChannel: null,
-        open: {}
-      },
-
-      embeds: [],
-      events: [],
-
-      serverSetup: {
-        completed: false
-      }
+      staffRole: null
     };
 
     saveConfig();
@@ -201,37 +154,40 @@ Have fun, stay safe, and enjoy your time here! 💙`,
 
   const g = config[guildId];
 
-  if (!g.welcome)
+  /* Migration / safety defaults */
+  if (!g.welcome) {
     g.welcome = {
       enabled: false,
       channel: null,
       title: "👋 Welcome to {server}!",
-      description: "Welcome to {server}, {user}!",
-      message: "Have fun!",
+      description: "Welcome to {server}, {user}! 🎉",
+      message: "We're glad to have you here.",
       color: ACCENT,
       image: null,
       footer: "JRC Bot • Welcome",
       timestamp: true,
       thumbnail: true
     };
+  }
 
-  if (!g.goodbye)
+  if (!g.goodbye) {
     g.goodbye = {
       enabled: false,
       channel: null,
       title: "👋 Goodbye from {server}",
       description: "We're sorry to see you go, {user}.",
-      message: "👋 {user} has left {server}.",
-      color: "#ED4245",
+      message: "Thanks for being part of the community!",
+      color: DANGER,
       image: null,
       footer: "JRC Bot • Goodbye",
       timestamp: true,
       thumbnail: true
     };
+  }
 
   if (!g.warnings) g.warnings = {};
 
-  if (!g.automod)
+  if (!g.automod) {
     g.automod = {
       enabled: false,
       words: [],
@@ -242,118 +198,182 @@ Have fun, stay safe, and enjoy your time here! 💙`,
       },
       links: false
     };
+  }
 
-  if (!g.logs)
+  if (!g.logs) {
     g.logs = {
       enabled: false,
       channel: null
     };
+  }
+
+  if (!g.security) {
+    g.security = {
+      antiSpam: false,
+      antiLink: false,
+      antiRaid: false,
+      antiMention: false,
+      raidThreshold: 8,
+      raidInterval: 10000,
+      mentionLimit: 5
+    };
+  }
 
   if (!g.reactionRoles) g.reactionRoles = [];
 
-  if (!g.antinuke)
-    g.antinuke = {
+  if (!g.autoRole) {
+    g.autoRole = {
       enabled: false,
-      threshold: 5,
-      interval: 10000
+      role: null
     };
+  }
 
-  if (!g.raid)
-    g.raid = {
-      enabled: false,
-      threshold: 8,
-      interval: 10000,
-      action: "kick",
-      activeUntil: 0
-    };
-
-  if (!g.tickets)
-    g.tickets = {
-      enabled: false,
-      category: null,
-      supportRole: null,
-      logChannel: null,
-      open: {}
-    };
-
-  if (!g.tickets.open) g.tickets.open = {};
-  if (!g.embeds) g.embeds = [];
-  if (!g.events) g.events = [];
-
-  if (!g.serverSetup)
-    g.serverSetup = {
-      completed: false
-    };
+  if (!g.embeds) g.embeds = {};
+  if (!g.staffRole) g.staffRole = null;
 
   return g;
 }
 
-function replaceVariables(text, member) {
-  if (!text) return "";
+/* =========================================================
+   GENERAL HELPERS
+   ========================================================= */
 
-  return text
-    .replaceAll(
-      "{user}",
-      member?.user ? `<@${member.user.id}>` : ""
+function isAdmin(i) {
+  return !!i.memberPermissions?.has(
+    PermissionFlagsBits.Administrator
+  );
+}
+
+function hasManageGuild(i) {
+  return (
+    isAdmin(i) ||
+    !!i.memberPermissions?.has(
+      PermissionFlagsBits.ManageGuild
     )
-    .replaceAll(
-      "{username}",
-      member?.user?.username || ""
+  );
+}
+
+function hasManageMessages(i) {
+  return (
+    isAdmin(i) ||
+    !!i.memberPermissions?.has(
+      PermissionFlagsBits.ManageMessages
     )
-    .replaceAll(
-      "{server}",
-      member?.guild?.name || ""
-    );
+  );
+}
+
+function hasManageRoles(i) {
+  return (
+    isAdmin(i) ||
+    !!i.memberPermissions?.has(
+      PermissionFlagsBits.ManageRoles
+    )
+  );
+}
+
+function hasModerate(i) {
+  return (
+    isAdmin(i) ||
+    !!i.memberPermissions?.has(
+      PermissionFlagsBits.ModerateMembers
+    )
+  );
+}
+
+function clip(value, max = 1024) {
+  return String(value ?? "").slice(0, max);
 }
 
 function validColor(color) {
   return /^#?[0-9A-F]{6}$/i.test(color || "");
 }
 
+function normColor(color, fallback = ACCENT) {
+  if (!validColor(color)) return fallback;
+
+  return color.startsWith("#")
+    ? color
+    : `#${color}`;
+}
+
 function validImage(url) {
   if (!url) return false;
 
   try {
-    new URL(url);
-    return true;
+    const u = new URL(url);
+    return ["http:", "https:"].includes(u.protocol);
   } catch {
     return false;
   }
 }
 
-function normColor(color, fallback = ACCENT) {
-  return validColor(color)
-    ? color.startsWith("#")
-      ? color
-      : `#${color}`
-    : fallback;
+function replaceVariables(text, member) {
+  if (!text) return "";
+
+  const user = member?.user;
+
+  return String(text)
+    .replaceAll(
+      "{user}",
+      user ? `<@${user.id}>` : ""
+    )
+    .replaceAll(
+      "{username}",
+      user?.username || ""
+    )
+    .replaceAll(
+      "{server}",
+      member?.guild?.name || ""
+    )
+    .replaceAll(
+      "{membercount}",
+      member?.guild?.memberCount
+        ? String(member.guild.memberCount)
+        : ""
+    )
+    .replaceAll(
+      "{id}",
+      user?.id || ""
+    );
 }
 
-function clip(s, n = 1024) {
-  return String(s ?? "").slice(0, n);
-}
+/* =========================================================
+   CENTRAL EMBED SYSTEM
+   ========================================================= */
 
 function baseEmbed(color = ACCENT) {
   return new EmbedBuilder()
-    .setColor(color)
-    .setFooter({ text: "JRC Bot" })
+    .setColor(normColor(color))
+    .setFooter({
+      text: "JRC Bot"
+    })
     .setTimestamp();
 }
 
 function buildGreetingEmbed(type, member, settings) {
-  const embed = new EmbedBuilder()
-    .setColor(normColor(settings.color))
-    .setTitle(replaceVariables(settings.title, member))
+  const embed = baseEmbed(settings.color)
+    .setTitle(
+      replaceVariables(settings.title, member)
+    )
     .setDescription(
       replaceVariables(settings.description, member)
-    )
-    .addFields({
-      name: type === "welcome" ? "💬 Greeting" : "💬 Message",
+    );
+
+  if (settings.message) {
+    embed.addFields({
+      name:
+        type === "welcome"
+          ? "💬 Welcome"
+          : "💬 Message",
       value: clip(
-        replaceVariables(settings.message, member),
+        replaceVariables(
+          settings.message,
+          member
+        ),
         1024
       )
     });
+  }
 
   if (
     settings.thumbnail &&
@@ -367,89 +387,75 @@ function buildGreetingEmbed(type, member, settings) {
     );
   }
 
-  if (settings.image && validImage(settings.image))
+  if (
+    settings.image &&
+    validImage(settings.image)
+  ) {
     embed.setImage(settings.image);
+  }
 
-  if (settings.footer)
+  if (settings.footer) {
     embed.setFooter({
-      text: replaceVariables(settings.footer, member)
+      text: replaceVariables(
+        settings.footer,
+        member
+      )
     });
+  }
 
-  if (settings.timestamp) embed.setTimestamp();
+  if (settings.timestamp) {
+    embed.setTimestamp();
+  }
 
   return embed;
 }
 
-function greetingPanel(type, guild) {
-  const settings = guildConfig(guild.id)[type];
-
-  const embed = baseEmbed(normColor(settings.color))
-    .setTitle(
-      type === "welcome"
-        ? "👋 Welcome System"
-        : "👋 Goodbye System"
-    )
-    .setDescription(
-      `Configure the **${type}** system for **${guild.name}**.
-
-**Status:** ${
-        settings.enabled ? "🟢 Enabled" : "🔴 Disabled"
-      }
-**Channel:** ${
-        settings.channel
-          ? `<#${settings.channel}>`
-          : "Not configured"
-      }
-
-Use the buttons below to configure your embed, channel, preview, and status.`
-    );
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`jrc_config_${type}`)
-      .setLabel("Configure")
-      .setEmoji("⚙️")
-      .setStyle(ButtonStyle.Primary),
-
-    new ButtonBuilder()
-      .setCustomId(`jrc_channel_${type}`)
-      .setLabel("Channel")
-      .setEmoji("📢")
-      .setStyle(ButtonStyle.Secondary),
-
-    new ButtonBuilder()
-      .setCustomId(`jrc_preview_${type}`)
-      .setLabel("Preview")
-      .setEmoji("👁️")
-      .setStyle(ButtonStyle.Secondary),
-
-    new ButtonBuilder()
-      .setCustomId(`jrc_enable_${type}`)
-      .setLabel("Enable")
-      .setEmoji("🟢")
-      .setStyle(ButtonStyle.Success),
-
-    new ButtonBuilder()
-      .setCustomId(`jrc_disable_${type}`)
-      .setLabel("Disable")
-      .setEmoji("🔴")
-      .setStyle(ButtonStyle.Danger)
-  );
-
-  return {
-    embeds: [embed],
-    components: [row],
-    flags: MessageFlags.Ephemeral
-  };
-}
-
 async function safeReply(interaction, data) {
   try {
-    return interaction.replied || interaction.deferred
-      ? interaction.followUp(data)
-      : interaction.reply(data);
-  } catch {}
+    if (interaction.replied || interaction.deferred) {
+      return await interaction.followUp(data);
+    }
+
+    return await interaction.reply(data);
+  } catch (error) {
+    console.error("Reply error:", error);
+  }
 }
+
+async function sendEmbed(
+  interaction,
+  title,
+  description,
+  color = ACCENT,
+  options = {}
+) {
+  const embed = baseEmbed(color)
+    .setTitle(title)
+    .setDescription(description);
+
+  if (options.fields?.length) {
+    embed.addFields(options.fields);
+  }
+
+  if (options.thumbnail) {
+    embed.setThumbnail(options.thumbnail);
+  }
+
+  if (options.image) {
+    embed.setImage(options.image);
+  }
+
+  return safeReply(interaction, {
+    embeds: [embed],
+    flags: options.ephemeral
+      ? MessageFlags.Ephemeral
+      : undefined
+  });
+}
+
+/* =========================================================
+   LOG SYSTEM
+   ========================================================= */
 
 async function logAction(
   guild,
@@ -458,23 +464,33 @@ async function logAction(
   color = ACCENT,
   fields = []
 ) {
-  const cfg = guildConfig(guild.id);
-
-  if (!cfg.logs.enabled || !cfg.logs.channel) return;
-
-  const ch = guild.channels.cache.get(cfg.logs.channel);
-
-  if (!ch?.isTextBased()) return;
-
-  const e = baseEmbed(color)
-    .setTitle(title)
-    .setDescription(description);
-
-  if (fields.length) e.addFields(fields);
-
   try {
-    await ch.send({ embeds: [e] });
-  } catch {}
+    const cfg = guildConfig(guild.id);
+
+    if (!cfg.logs.enabled || !cfg.logs.channel) {
+      return;
+    }
+
+    const channel = guild.channels.cache.get(
+      cfg.logs.channel
+    );
+
+    if (!channel?.isTextBased()) return;
+
+    const embed = baseEmbed(color)
+      .setTitle(title)
+      .setDescription(description);
+
+    if (fields.length) {
+      embed.addFields(fields);
+    }
+
+    await channel.send({
+      embeds: [embed]
+    });
+  } catch (error) {
+    console.error("Log error:", error);
+  }
 }
 
 /* =========================================================
@@ -483,2362 +499,780 @@ async function logAction(
 
 const commands = [];
 
+/* JRC */
 commands.push(
   new SlashCommandBuilder()
     .setName("jrc")
-    .setDescription("JRC Bot control panel")
+    .setDescription("JRC Bot control center")
     .addSubcommand(s =>
-      s
-        .setName("help")
-        .setDescription("View JRC Bot commands")
+      s.setName("help")
+        .setDescription("Show JRC commands")
     )
     .addSubcommand(s =>
-      s
-        .setName("settings")
-        .setDescription("View server settings")
+      s.setName("about")
+        .setDescription("About JRC")
     )
     .addSubcommand(s =>
-      s
-        .setName("about")
-        .setDescription("About JRC Bot")
+      s.setName("status")
+        .setDescription("Show JRC status")
     )
     .addSubcommand(s =>
-      s
-        .setName("status")
-        .setDescription("View bot status")
+      s.setName("settings")
+        .setDescription("Show server settings")
     )
+    .toJSON()
 );
 
+/* WELCOME */
 commands.push(
   new SlashCommandBuilder()
     .setName("welcome")
     .setDescription("Configure welcome messages")
     .addSubcommand(s =>
-      s.setName("setup").setDescription("Open welcome setup")
+      s.setName("setup")
+        .setDescription("Open welcome setup")
     )
     .addSubcommand(s =>
-      s.setName("disable").setDescription("Disable welcome")
+      s.setName("disable")
+        .setDescription("Disable welcome messages")
     )
     .addSubcommand(s =>
-      s.setName("test").setDescription("Test welcome")
+      s.setName("message")
+        .setDescription("View welcome configuration")
     )
     .addSubcommand(s =>
-      s
-        .setName("message")
-        .setDescription("View welcome message")
-    )
-    .addSubcommand(s =>
-      s
-        .setName("channel")
+      s.setName("channel")
         .setDescription("Set welcome channel")
+        .addChannelOption(o =>
+          o.setName("channel")
+            .setDescription("Welcome channel")
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
     )
     .addSubcommand(s =>
-      s.setName("preview").setDescription("Preview welcome")
+      s.setName("preview")
+        .setDescription("Preview welcome embed")
     )
+    .toJSON()
 );
 
+/* GOODBYE */
 commands.push(
   new SlashCommandBuilder()
     .setName("goodbye")
     .setDescription("Configure goodbye messages")
     .addSubcommand(s =>
-      s.setName("setup").setDescription("Open goodbye setup")
+      s.setName("setup")
+        .setDescription("Open goodbye setup")
     )
     .addSubcommand(s =>
-      s.setName("disable").setDescription("Disable goodbye")
+      s.setName("disable")
+        .setDescription("Disable goodbye messages")
     )
     .addSubcommand(s =>
-      s.setName("test").setDescription("Test goodbye")
+      s.setName("message")
+        .setDescription("View goodbye configuration")
     )
     .addSubcommand(s =>
-      s
-        .setName("message")
-        .setDescription("View goodbye message")
-    )
-    .addSubcommand(s =>
-      s
-        .setName("channel")
+      s.setName("channel")
         .setDescription("Set goodbye channel")
+        .addChannelOption(o =>
+          o.setName("channel")
+            .setDescription("Goodbye channel")
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
     )
     .addSubcommand(s =>
-      s.setName("preview").setDescription("Preview goodbye")
+      s.setName("preview")
+        .setDescription("Preview goodbye embed")
     )
+    .toJSON()
 );
 
+/* MODERATION */
 commands.push(
   new SlashCommandBuilder()
     .setName("mod")
     .setDescription("Moderation commands")
     .addSubcommand(s =>
-      s
-        .setName("ban")
+      s.setName("ban")
         .setDescription("Ban a member")
         .addUserOption(o =>
-          o
-            .setName("user")
+          o.setName("user")
             .setDescription("Member")
             .setRequired(true)
         )
         .addStringOption(o =>
-          o.setName("reason").setDescription("Reason")
+          o.setName("reason")
+            .setDescription("Reason")
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("kick")
+      s.setName("kick")
         .setDescription("Kick a member")
         .addUserOption(o =>
-          o
-            .setName("user")
+          o.setName("user")
             .setDescription("Member")
             .setRequired(true)
         )
         .addStringOption(o =>
-          o.setName("reason").setDescription("Reason")
+          o.setName("reason")
+            .setDescription("Reason")
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("timeout")
+      s.setName("timeout")
         .setDescription("Timeout a member")
         .addUserOption(o =>
-          o
-            .setName("user")
+          o.setName("user")
             .setDescription("Member")
             .setRequired(true)
         )
         .addIntegerOption(o =>
-          o
-            .setName("minutes")
+          o.setName("minutes")
             .setDescription("Minutes")
-            .setRequired(true)
             .setMinValue(1)
             .setMaxValue(40320)
+            .setRequired(true)
         )
         .addStringOption(o =>
-          o.setName("reason").setDescription("Reason")
+          o.setName("reason")
+            .setDescription("Reason")
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("warn")
+      s.setName("warn")
         .setDescription("Warn a member")
         .addUserOption(o =>
-          o
-            .setName("user")
+          o.setName("user")
             .setDescription("Member")
             .setRequired(true)
         )
         .addStringOption(o =>
-          o
-            .setName("reason")
+          o.setName("reason")
             .setDescription("Reason")
             .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("warnings")
+      s.setName("warnings")
         .setDescription("View warnings")
         .addUserOption(o =>
-          o
-            .setName("user")
+          o.setName("user")
             .setDescription("Member")
             .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("clear")
+      s.setName("clear")
         .setDescription("Delete messages")
         .addIntegerOption(o =>
-          o
-            .setName("amount")
+          o.setName("amount")
             .setDescription("Amount")
-            .setRequired(true)
             .setMinValue(1)
             .setMaxValue(100)
+            .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s.setName("lock").setDescription("Lock channel")
+      s.setName("lock")
+        .setDescription("Lock this channel")
     )
     .addSubcommand(s =>
-      s.setName("unlock").setDescription("Unlock channel")
+      s.setName("unlock")
+        .setDescription("Unlock this channel")
     )
+    .toJSON()
 );
 
+/* LOGS */
+commands.push(
+  new SlashCommandBuilder()
+    .setName("logs")
+    .setDescription("Configure moderation logs")
+    .addSubcommand(s =>
+      s.setName("setup")
+        .setDescription("Set log channel")
+        .addChannelOption(o =>
+          o.setName("channel")
+            .setDescription("Log channel")
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("disable")
+        .setDescription("Disable logs")
+    )
+    .addSubcommand(s =>
+      s.setName("test")
+        .setDescription("Send a test log")
+    )
+    .toJSON()
+);
+
+/* SECURITY */
+commands.push(
+  new SlashCommandBuilder()
+    .setName("security")
+    .setDescription("JRC security protection")
+    .addSubcommand(s =>
+      s.setName("status")
+        .setDescription("View security status")
+    )
+    .addSubcommand(s =>
+      s.setName("antispam")
+        .setDescription("Toggle anti-spam")
+        .addBooleanOption(o =>
+          o.setName("enabled")
+            .setDescription("Enable or disable")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("antilink")
+        .setDescription("Toggle anti-link")
+        .addBooleanOption(o =>
+          o.setName("enabled")
+            .setDescription("Enable or disable")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("antiraid")
+        .setDescription("Toggle anti-raid")
+        .addBooleanOption(o =>
+          o.setName("enabled")
+            .setDescription("Enable or disable")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("antimention")
+        .setDescription("Toggle mention protection")
+        .addBooleanOption(o =>
+          o.setName("enabled")
+            .setDescription("Enable or disable")
+            .setRequired(true)
+        )
+    )
+    .toJSON()
+);
+
+/* AUTOMOD */
 commands.push(
   new SlashCommandBuilder()
     .setName("automod")
     .setDescription("Configure automod")
     .addSubcommand(s =>
-      s.setName("setup").setDescription("View automod setup")
+      s.setName("setup")
+        .setDescription("View automod settings")
     )
     .addSubcommand(s =>
-      s.setName("enable").setDescription("Enable automod")
+      s.setName("enable")
+        .setDescription("Enable automod")
     )
     .addSubcommand(s =>
-      s.setName("disable").setDescription("Disable automod")
+      s.setName("disable")
+        .setDescription("Disable automod")
     )
     .addSubcommand(s =>
-      s
-        .setName("words")
-        .setDescription("Configure blocked words")
+      s.setName("words")
+        .setDescription("Add blocked word")
         .addStringOption(o =>
-          o
-            .setName("words")
-            .setDescription("Comma separated words")
+          o.setName("word")
+            .setDescription("Word")
             .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("spam")
+      s.setName("spam")
         .setDescription("Configure spam protection")
-        .addIntegerOption(o =>
-          o
-            .setName("limit")
-            .setDescription("Message limit")
+        .addBooleanOption(o =>
+          o.setName("enabled")
+            .setDescription("Enable")
             .setRequired(true)
+        )
+        .addIntegerOption(o =>
+          o.setName("limit")
+            .setDescription("Messages")
+            .setMinValue(2)
+            .setMaxValue(50)
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("links")
-        .setDescription("Configure link blocking")
+      s.setName("links")
+        .setDescription("Toggle link filtering")
         .addBooleanOption(o =>
-          o
-            .setName("enabled")
-            .setDescription("Enabled")
+          o.setName("enabled")
+            .setDescription("Enable")
             .setRequired(true)
         )
     )
+    .toJSON()
 );
 
+/* ROLES */
+commands.push(
+  new SlashCommandBuilder()
+    .setName("role")
+    .setDescription("Role management")
+    .addSubcommand(s =>
+      s.setName("add")
+        .setDescription("Give a role")
+        .addUserOption(o =>
+          o.setName("user")
+            .setDescription("Member")
+            .setRequired(true)
+        )
+        .addRoleOption(o =>
+          o.setName("role")
+            .setDescription("Role")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("remove")
+        .setDescription("Remove a role")
+        .addUserOption(o =>
+          o.setName("user")
+            .setDescription("Member")
+            .setRequired(true)
+        )
+        .addRoleOption(o =>
+          o.setName("role")
+            .setDescription("Role")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("info")
+        .setDescription("Role information")
+        .addRoleOption(o =>
+          o.setName("role")
+            .setDescription("Role")
+            .setRequired(true)
+        )
+    )
+    .toJSON()
+);
+
+/* AUTOROLE */
+commands.push(
+  new SlashCommandBuilder()
+    .setName("autorole")
+    .setDescription("Configure automatic roles")
+    .addSubcommand(s =>
+      s.setName("setup")
+        .setDescription("Set the automatic role")
+        .addRoleOption(o =>
+          o.setName("role")
+            .setDescription("Role")
+            .setRequired(true)
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("enable")
+        .setDescription("Enable autorole")
+    )
+    .addSubcommand(s =>
+      s.setName("disable")
+        .setDescription("Disable autorole")
+    )
+    .addSubcommand(s =>
+      s.setName("status")
+        .setDescription("View autorole status")
+    )
+    .toJSON()
+);
+
+/* REACTION ROLES */
 commands.push(
   new SlashCommandBuilder()
     .setName("reactionrole")
-    .setDescription("Reaction role commands")
+    .setDescription("Self-role system")
     .addSubcommand(s =>
-      s
-        .setName("create")
-        .setDescription("Create reaction role message")
-        .addChannelOption(o =>
-          o
-            .setName("channel")
-            .setDescription("Channel")
-            .setRequired(true)
-            .addChannelTypes(ChannelType.GuildText)
-        )
-        .addStringOption(o =>
-          o
-            .setName("message")
-            .setDescription("Message")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s
-        .setName("add")
-        .setDescription("Add reaction role")
-        .addStringOption(o =>
-          o
-            .setName("message")
-            .setDescription("Message ID")
-            .setRequired(true)
-        )
-        .addStringOption(o =>
-          o
-            .setName("emoji")
-            .setDescription("Emoji")
-            .setRequired(true)
-        )
+      s.setName("create")
+        .setDescription("Create a self-role")
         .addRoleOption(o =>
-          o
-            .setName("role")
+          o.setName("role")
             .setDescription("Role")
             .setRequired(true)
         )
+        .addStringOption(o =>
+          o.setName("emoji")
+            .setDescription("Emoji")
+            .setRequired(true)
+        )
+        .addStringOption(o =>
+          o.setName("text")
+            .setDescription("Panel text")
+            .setRequired(true)
+        )
     )
     .addSubcommand(s =>
-      s
-        .setName("remove")
-        .setDescription("Remove reaction role")
+      s.setName("remove")
+        .setDescription("Remove a self-role")
         .addStringOption(o =>
-          o
-            .setName("message")
+          o.setName("message")
             .setDescription("Message ID")
             .setRequired(true)
         )
         .addStringOption(o =>
-          o
-            .setName("emoji")
+          o.setName("emoji")
             .setDescription("Emoji")
             .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s.setName("list").setDescription("List reaction roles")
+      s.setName("list")
+        .setDescription("List self-roles")
     )
+    .toJSON()
 );
 
+/* EMBEDS */
 commands.push(
   new SlashCommandBuilder()
-    .setName("logs")
-    .setDescription("Configure logging")
+    .setName("embed")
+    .setDescription("Create custom embeds")
     .addSubcommand(s =>
-      s.setName("setup").setDescription("Setup logs")
+      s.setName("create")
+        .setDescription("Create an embed")
+        .addChannelOption(o =>
+          o.setName("channel")
+            .setDescription("Target channel")
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+        .addStringOption(o =>
+          o.setName("title")
+            .setDescription("Embed title")
+            .setRequired(true)
+        )
+        .addStringOption(o =>
+          o.setName("description")
+            .setDescription("Embed description")
+            .setRequired(true)
+        )
+        .addStringOption(o =>
+          o.setName("color")
+            .setDescription("Hex color")
+        )
+        .addStringOption(o =>
+          o.setName("image")
+            .setDescription("Image or GIF URL")
+        )
+        .addStringOption(o =>
+          o.setName("footer")
+            .setDescription("Footer")
+        )
     )
     .addSubcommand(s =>
-      s.setName("disable").setDescription("Disable logs")
+      s.setName("delete")
+        .setDescription("Delete a saved embed")
+        .addStringOption(o =>
+          o.setName("id")
+            .setDescription("Embed ID")
+            .setRequired(true)
+        )
     )
     .addSubcommand(s =>
-      s.setName("test").setDescription("Test logs")
+      s.setName("list")
+        .setDescription("List saved embeds")
     )
+    .toJSON()
 );
 
+/* UTILITY */
 commands.push(
   new SlashCommandBuilder()
     .setName("utility")
-    .setDescription("Utility commands")
+    .setDescription("Useful utilities")
     .addSubcommand(s =>
-      s
-        .setName("userinfo")
-        .setDescription("View user information")
+      s.setName("userinfo")
+        .setDescription("User information")
         .addUserOption(o =>
-          o.setName("user").setDescription("User")
+          o.setName("user")
+            .setDescription("User")
+            .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s.setName("serverinfo").setDescription("Server information")
+      s.setName("serverinfo")
+        .setDescription("Server information")
     )
     .addSubcommand(s =>
-      s
-        .setName("avatar")
+      s.setName("avatar")
         .setDescription("View avatar")
         .addUserOption(o =>
-          o.setName("user").setDescription("User")
+          o.setName("user")
+            .setDescription("User")
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("roleinfo")
-        .setDescription("View role information")
+      s.setName("roleinfo")
+        .setDescription("Role information")
         .addRoleOption(o =>
-          o
-            .setName("role")
+          o.setName("role")
             .setDescription("Role")
             .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("channelinfo")
-        .setDescription("View channel information")
-        .addChannelOption(o =>
-          o.setName("channel").setDescription("Channel")
-        )
+      s.setName("ping")
+        .setDescription("Check bot latency")
     )
+    .toJSON()
 );
 
-commands.push
+/* FUN */
+commands.push(
   new SlashCommandBuilder()
     .setName("fun")
     .setDescription("Fun commands")
     .addSubcommand(s =>
-      s
-        .setName("8ball")
-        .setDescription("Ask the 8ball")
+      s.setName("8ball")
+        .setDescription("Ask the magic 8-ball")
         .addStringOption(o =>
-          o
-            .setName("question")
+          o.setName("question")
             .setDescription("Question")
             .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s.setName("coinflip").setDescription("Flip a coin")
+      s.setName("coinflip")
+        .setDescription("Flip a coin")
     )
     .addSubcommand(s =>
-      s.setName("dice").setDescription("Roll a dice")
+      s.setName("dice")
+        .setDescription("Roll a dice")
     )
     .addSubcommand(s =>
-      s
-        .setName("choose")
-        .setDescription("Choose between options")
+      s.setName("choose")
+        .setDescription("Choose an option")
         .addStringOption(o =>
-          o
-            .setName("options")
-            .setDescription("Comma separated options")
+          o.setName("options")
+            .setDescription("Separate options with commas")
             .setRequired(true)
         )
     )
     .addSubcommand(s =>
-      s
-        .setName("poll")
-        .setDescription("Create a poll")
+      s.setName("rps")
+        .setDescription("Play rock paper scissors")
         .addStringOption(o =>
-          o
-            .setName("question")
-            .setDescription("Question")
+          o.setName("choice")
+            .setDescription("Your choice")
+            .setRequired(true)
+            .addChoices(
+              {
+                name: "Rock",
+                value: "rock"
+              },
+              {
+                name: "Paper",
+                value: "paper"
+              },
+              {
+                name: "Scissors",
+                value: "scissors"
+              }
+            )
+        )
+    )
+    .addSubcommand(s =>
+      s.setName("rate")
+        .setDescription("Rate something")
+        .addStringOption(o =>
+          o.setName("thing")
+            .setDescription("Thing to rate")
             .setRequired(true)
         )
     )
+    .addSubcommand(s =>
+      s.setName("compliment")
+        .setDescription("Get a compliment")
     )
     .toJSON()
-
-
-
-
-commands.push(
-  new SlashCommandBuilder()
-    .setName("antinuke")
-    .setDescription("Anti-nuke protection")
-    .addSubcommand(s =>
-      s.setName("setup").setDescription("Setup anti-nuke")
-    )
-    .addSubcommand(s =>
-      s.setName("enable").setDescription("Enable anti-nuke")
-    )
-    .addSubcommand(s =>
-      s.setName("disable").setDescription("Disable anti-nuke")
-    )
-    .addSubcommand(s =>
-      s
-        .setName("config")
-        .setDescription("Configure anti-nuke")
-        .addIntegerOption(o =>
-          o
-            .setName("threshold")
-            .setDescription("Action threshold")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s.setName("status").setDescription("Anti-nuke status")
-    )
-);
-
-commands.push(
-  new SlashCommandBuilder()
-    .setName("raid")
-    .setDescription("Raid protection")
-    .addSubcommand(s =>
-      s.setName("setup").setDescription("Setup raid protection")
-    )
-    .addSubcommand(s =>
-      s.setName("enable").setDescription("Enable raid protection")
-    )
-    .addSubcommand(s =>
-      s.setName("disable").setDescription("Disable raid protection")
-    )
-    .addSubcommand(s =>
-      s
-        .setName("config")
-        .setDescription("Configure raid protection")
-        .addIntegerOption(o =>
-          o
-            .setName("threshold")
-            .setDescription("Join threshold")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s.setName("status").setDescription("Raid status")
-    )
 );
 
 /* =========================================================
-   TICKET SYSTEM
+   WELCOME / GOODBYE SETUP
    ========================================================= */
 
-commands.push(
-  new SlashCommandBuilder()
-    .setName("ticket")
-    .setDescription("Ticket system")
-    .addSubcommand(s =>
-      s
-        .setName("setup")
-        .setDescription("Configure the ticket system")
-        .addChannelOption(o =>
-          o
-            .setName("category")
-            .setDescription("Ticket category")
-            .setRequired(true)
-            .addChannelTypes(ChannelType.GuildCategory)
-        )
-        .addRoleOption(o =>
-          o
-            .setName("support")
-            .setDescription("Support role")
-            .setRequired(true)
-        )
-        .addChannelOption(o =>
-          o
-            .setName("logs")
-            .setDescription("Optional ticket log channel")
-            .addChannelTypes(ChannelType.GuildText)
-        )
-    )
-    .addSubcommand(s =>
-      s.setName("panel").setDescription("Post the ticket panel")
-    )
-    .addSubcommand(s =>
-      s.setName("close").setDescription("Close this ticket")
-    )
-    .addSubcommand(s =>
-      s
-        .setName("add")
-        .setDescription("Add a user to this ticket")
-        .addUserOption(o =>
-          o
-            .setName("user")
-            .setDescription("User")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s
-        .setName("remove")
-        .setDescription("Remove a user from this ticket")
-        .addUserOption(o =>
-          o
-            .setName("user")
-            .setDescription("User")
-            .setRequired(true)
-        )
-    )
-);
+function greetingPanel(type, guild) {
+  const settings =
+    guildConfig(guild.id)[type];
 
-commands.push(
-  new SlashCommandBuilder()
-    .setName("embed")
-    .setDescription("Create announcement embeds")
-    .addSubcommand(s =>
-      s
-        .setName("create")
-        .setDescription("Create an embed")
-        .addChannelOption(o =>
-          o
-            .setName("channel")
-            .setDescription("Announcement channel")
-            .setRequired(true)
-            .addChannelTypes(ChannelType.GuildText)
-        )
-        .addStringOption(o =>
-          o
-            .setName("thumbnail")
-            .setDescription("Optional thumbnail URL")
-        )
-    )
-    .addSubcommand(s =>
-      s
-        .setName("edit")
-        .setDescription("Edit a saved embed")
-        .addStringOption(o =>
-          o
-            .setName("id")
-            .setDescription("Embed ID")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s
-        .setName("delete")
-        .setDescription("Delete a saved embed")
-        .addStringOption(o =>
-          o
-            .setName("id")
-            .setDescription("Embed ID")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s
-        .setName("preview")
-        .setDescription("Preview a saved embed")
-        .addStringOption(o =>
-          o
-            .setName("id")
-            .setDescription("Embed ID")
-            .setRequired(true)
-        )
-    )
-);
-
-commands.push(
-  new SlashCommandBuilder()
-    .setName("server")
-    .setDescription("Server setup")
-    .addSubcommand(s =>
-      s
-        .setName("setup")
-        .setDescription("Create recommended JRC channels")
-    )
-);
-
-commands.push(
-  new SlashCommandBuilder()
-    .setName("event")
-    .setDescription("Server events")
-    .addSubcommand(s =>
-      s
-        .setName("create")
-        .setDescription("Create an event")
-        .addStringOption(o =>
-          o
-            .setName("title")
-            .setDescription("Event title")
-            .setRequired(true)
-        )
-        .addStringOption(o =>
-          o
-            .setName("description")
-            .setDescription("Event description")
-            .setRequired(true)
-        )
-        .addStringOption(o =>
-          o
-            .setName("date")
-            .setDescription("Date/time text")
-            .setRequired(true)
-        )
-        .addChannelOption(o =>
-          o
-            .setName("channel")
-            .setDescription("Event channel")
-            .addChannelTypes(ChannelType.GuildText)
-        )
-    )
-    .addSubcommand(s =>
-      s
-        .setName("edit")
-        .setDescription("Edit an event")
-        .addStringOption(o =>
-          o
-            .setName("id")
-            .setDescription("Event ID")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s
-        .setName("cancel")
-        .setDescription("Cancel an event")
-        .addStringOption(o =>
-          o
-            .setName("id")
-            .setDescription("Event ID")
-            .setRequired(true)
-        )
-    )
-    .addSubcommand(s =>
-      s.setName("list").setDescription("List active events")
-    )
-);
-
-/* =========================================================
-   HELPERS
-   ========================================================= */
-
-function hasAdmin(i) {
-  return i.memberPermissions?.has(
-    PermissionFlagsBits.Administrator
-  );
-}
-
-function hasManageChannels(i) {
-  return (
-    hasAdmin(i) ||
-    i.memberPermissions?.has(
-      PermissionFlagsBits.ManageChannels
-    )
-  );
-}
-
-function hasManageMessages(i) {
-  return (
-    hasAdmin(i) ||
-    i.memberPermissions?.has(
-      PermissionFlagsBits.ManageMessages
-    )
-  );
-}
-
-function hasManageEvents(i) {
-  return (
-    hasAdmin(i) ||
-    i.memberPermissions?.has(
-      PermissionFlagsBits.ManageGuild
-    )
-  );
-}
-
-function isTicketChannel(channel) {
-  return channel?.topic?.startsWith("JRC-TICKET:");
-}
-
-function ticketData(channel) {
-  if (!isTicketChannel(channel)) return null;
-
-  try {
-    return JSON.parse(
-      channel.topic.replace("JRC-TICKET:", "")
-    );
-  } catch {
-    return null;
-  }
-}
-
-function ticketButtons() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("jrc_ticket_create")
-      .setLabel("Open Ticket")
-      .setEmoji("🎫")
-      .setStyle(ButtonStyle.Primary)
-  );
-}
-
-function eventButtons(id, disabled = false) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`jrc_event_rsvp_${id}`)
-      .setLabel("RSVP")
-      .setEmoji("✅")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(disabled)
-  );
-}
-
-function buildSavedEmbed(r) {
-  const e = baseEmbed(normColor(r.color))
-    .setTitle(r.title)
-    .setDescription(r.description);
-
-  if (r.image && validImage(r.image))
-    e.setImage(r.image);
-
-  if (r.thumbnail && validImage(r.thumbnail))
-    e.setThumbnail(r.thumbnail);
-
-  if (r.footer)
-    e.setFooter({
-      text: r.footer
-    });
-
-  return e;
-}
-
-function eventEmbed(ev, guild) {
-  return baseEmbed(ev.cancelled ? "#ED4245" : ACCENT)
+  const embed = baseEmbed(
+    settings.color
+  )
     .setTitle(
-      ev.cancelled
-        ? `❌ ${ev.title} — Cancelled`
-        : `🎉 ${ev.title}`
+      type === "welcome"
+        ? "👋 Welcome System"
+        : "🚪 Goodbye System"
     )
-    .setDescription(ev.description)
-    .addFields(
-      {
-        name: "📅 Date / Time",
-        value: ev.date,
-        inline: false
-      },
-      {
-        name: "👥 RSVPs",
-        value: `${ev.attendees.length}`,
-        inline: true
-      },
-      {
-        name: "🆔 Event ID",
-        value: `\`${ev.id}\``,
-        inline: true
-      }
-    )
-    .setFooter({
-      text: `JRC Bot • ${guild.name}`
-    });
-}
-
-/* =========================================================
-   TICKETS
-   ========================================================= */
-
-async function ticketLog(
-  guild,
-  title,
-  description,
-  color = ACCENT
-) {
-  const cfg = guildConfig(guild.id);
-
-  if (!cfg.tickets.logChannel) return;
-
-  const ch = guild.channels.cache.get(
-    cfg.tickets.logChannel
-  );
-
-  if (!ch?.isTextBased()) return;
-
-  await ch
-    .send({
-      embeds: [
-        baseEmbed(color)
-          .setTitle(title)
-          .setDescription(description)
-      ]
-    })
-    .catch(() => {});
-}
-
-async function handleTicket(i) {
-  const sub = i.options.getSubcommand();
-  const cfg = guildConfig(i.guild.id);
-
-  if (sub === "setup") {
-    if (!hasManageChannels(i))
-      return i.reply({
-        content:
-          "❌ Manage Channels or Administrator is required.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    const category = i.options.getChannel("category");
-    const support = i.options.getRole("support");
-    const logs = i.options.getChannel("logs");
-
-    cfg.tickets.enabled = true;
-    cfg.tickets.category = category.id;
-    cfg.tickets.supportRole = support.id;
-
-    if (logs) cfg.tickets.logChannel = logs.id;
-
-    saveConfig();
-
-    return i.reply({
-      embeds: [
-        baseEmbed()
-          .setTitle("🎫 Ticket System Configured")
-          .setDescription(
-            "The JRC ticket system is ready."
-          )
-          .addFields(
-            {
-              name: "📁 Category",
-              value: `${category}`
-            },
-            {
-              name: "🛠️ Support Role",
-              value: `${support}`
-            },
-            {
-              name: "📜 Logs",
-              value: logs
-                ? `${logs}`
-                : "Not configured"
-            }
-          )
-      ],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "panel") {
-    if (!hasManageChannels(i))
-      return i.reply({
-        content:
-          "❌ Manage Channels or Administrator is required.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    if (
-      !cfg.tickets.enabled ||
-      !cfg.tickets.category ||
-      !cfg.tickets.supportRole
-    )
-      return i.reply({
-        content:
-          "❌ Configure the ticket system first with `/ticket setup`.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    return i.channel.send({
-      embeds: [
-        baseEmbed()
-          .setTitle("🎫 JRC Support")
-          .setDescription(
-            "Need help? Click the button below to open a private support ticket.\n\n" +
-              "A member of the support team will assist you as soon as possible."
-          )
-      ],
-      components: [ticketButtons()]
-    }).then(() =>
-      i.reply({
-        content: "✅ Ticket panel posted.",
-        flags: MessageFlags.Ephemeral
-      })
-    );
-  }
-
-  if (sub === "close")
-    return closeTicket(i);
-
-  if (sub === "add")
-    return ticketAdd(i);
-
-  if (sub === "remove")
-    return ticketRemove(i);
-}
-
-async function createTicket(i) {
-  const cfg = guildConfig(i.guild.id);
-
-  if (
-    !cfg.tickets.enabled ||
-    !cfg.tickets.category ||
-    !cfg.tickets.supportRole
-  ) {
-    return i.reply({
-      content:
-        "❌ Tickets are not configured yet.",
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (cfg.tickets.open[i.user.id]) {
-    const existing = i.guild.channels.cache.get(
-      cfg.tickets.open[i.user.id]
+    .setDescription(
+      `Configure the **${type}** system for **${guild.name}**.\n\n` +
+      `**Status:** ${
+        settings.enabled
+          ? "🟢 Enabled"
+          : "🔴 Disabled"
+      }\n` +
+      `**Channel:** ${
+        settings.channel
+          ? `<#${settings.channel}>`
+          : "Not configured"
+      }\n\n` +
+      `Use the buttons below to customize the embed.`
     );
 
-    if (existing)
-      return i.reply({
-        content: `❌ You already have an open ticket: ${existing}`,
-        flags: MessageFlags.Ephemeral
-      });
+  const row =
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`jrc_config_${type}`)
+        .setLabel("Configure")
+        .setEmoji("⚙️")
+        .setStyle(ButtonStyle.Primary),
 
-    delete cfg.tickets.open[i.user.id];
-    saveConfig();
-  }
+      new ButtonBuilder()
+        .setCustomId(`jrc_channel_${type}`)
+        .setLabel("Channel")
+        .setEmoji("📢")
+        .setStyle(ButtonStyle.Secondary),
 
-  const category = i.guild.channels.cache.get(
-    cfg.tickets.category
-  );
+      new ButtonBuilder()
+        .setCustomId(`jrc_preview_${type}`)
+        .setLabel("Preview")
+        .setEmoji("👁️")
+        .setStyle(ButtonStyle.Secondary),
 
-  if (!category)
-    return i.reply({
-      content:
-        "❌ The configured ticket category no longer exists.",
-      flags: MessageFlags.Ephemeral
-    });
+      new ButtonBuilder()
+        .setCustomId(`jrc_enable_${type}`)
+        .setLabel("Enable")
+        .setEmoji("🟢")
+        .setStyle(ButtonStyle.Success),
 
-  const channelName =
-    `ticket-${i.user.username}`
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
-      .slice(0, 80);
+      new ButtonBuilder()
+        .setCustomId(`jrc_disable_${type}`)
+        .setLabel("Disable")
+        .setEmoji("🔴")
+        .setStyle(ButtonStyle.Danger)
+    );
 
-  const channel = await i.guild.channels.create({
-    name: channelName,
-    type: ChannelType.GuildText,
-    parent: category.id,
-    topic: `JRC-TICKET:${JSON.stringify({
-      owner: i.user.id,
-      createdAt: Date.now()
-    })}`,
-    permissionOverwrites: [
-      {
-        id: i.guild.id,
-        deny: [
-          PermissionFlagsBits.ViewChannel
-        ]
-      },
-      {
-        id: i.user.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.AttachFiles
-        ]
-      },
-      {
-        id: cfg.tickets.supportRole,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.AttachFiles
-        ]
-      },
-      {
-        id: client.user.id,
-        allow: [
-          PermissionFlagsBits.ViewChannel,
-          PermissionFlagsBits.SendMessages,
-          PermissionFlagsBits.ReadMessageHistory,
-          PermissionFlagsBits.ManageChannels,
-          PermissionFlagsBits.ManageMessages
-        ]
-      }
-    ]
-  });
-
-  cfg.tickets.open[i.user.id] = channel.id;
-  saveConfig();
-
-  await channel.send({
-    content: `${i.user} <@&${cfg.tickets.supportRole}>`,
-    embeds: [
-      baseEmbed()
-        .setTitle("🎫 Ticket Opened")
-        .setDescription(
-          "Thanks for contacting support. Please explain what you need help with. A staff member will respond here."
-        )
-    ],
-    components: [
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("jrc_ticket_close")
-          .setLabel("Close Ticket")
-          .setEmoji("🔒")
-          .setStyle(ButtonStyle.Danger)
-      )
-    ]
-  });
-
-  await ticketLog(
-    i.guild,
-    "🎫 Ticket Created",
-    `${i.user} opened ${channel}.`,
-    "#57F287"
-  );
-
-  return i.reply({
-    content: `✅ Your ticket has been created: ${channel}`,
+  return {
+    embeds: [embed],
+    components: [row],
     flags: MessageFlags.Ephemeral
-  });
-}
-
-async function closeTicketButton(i) {
-  return closeTicket(i);
-}
-
-async function closeTicket(i) {
-  const data = ticketData(i.channel);
-
-  if (!data)
-    return i.reply({
-      content:
-        "❌ This command can only be used inside a ticket.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const cfg = guildConfig(i.guild.id);
-  const member = i.member;
-
-  const isOwner = data.owner === i.user.id;
-  const isSupport =
-    cfg.tickets.supportRole &&
-    member.roles?.cache?.has(
-      cfg.tickets.supportRole
-    );
-
-  if (
-    !isOwner &&
-    !isSupport &&
-    !hasManageChannels(i)
-  )
-    return i.reply({
-      content:
-        "❌ You don't have permission to close this ticket.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  await ticketLog(
-    i.guild,
-    "🎫 Ticket Closed",
-    `**Ticket:** ${i.channel}\n**Closed by:** ${i.user}`,
-    "#ED4245"
-  );
-
-  delete cfg.tickets.open[data.owner];
-  saveConfig();
-
-  await i.reply({
-    content:
-      "🔒 This ticket will be closed in 3 seconds."
-  });
-
-  setTimeout(() => {
-    i.channel.delete("JRC ticket closed").catch(() => {});
-  }, 3000);
-}
-
-async function ticketAdd(i) {
-  const data = ticketData(i.channel);
-
-  if (!data)
-    return i.reply({
-      content:
-        "❌ This command can only be used inside a ticket.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const cfg = guildConfig(i.guild.id);
-  const member = i.member;
-
-  const allowed =
-    data.owner === i.user.id ||
-    member.roles?.cache?.has(
-      cfg.tickets.supportRole
-    ) ||
-    hasManageChannels(i);
-
-  if (!allowed)
-    return i.reply({
-      content:
-        "❌ You don't have permission to add users.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const user = i.options.getUser("user");
-  const target = await i.guild.members
-    .fetch(user.id)
-    .catch(() => null);
-
-  if (!target)
-    return i.reply({
-      content: "❌ User not found.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  await i.channel.permissionOverwrites.edit(
-    user.id,
-    {
-      ViewChannel: true,
-      SendMessages: true,
-      ReadMessageHistory: true,
-      AttachFiles: true
-    }
-  );
-
-  return i.reply({
-    content: `✅ ${user} was added to the ticket.`
-  });
-}
-
-async function ticketRemove(i) {
-  const data = ticketData(i.channel);
-
-  if (!data)
-    return i.reply({
-      content:
-        "❌ This command can only be used inside a ticket.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const cfg = guildConfig(i.guild.id);
-  const member = i.member;
-
-  const allowed =
-    data.owner === i.user.id ||
-    member.roles?.cache?.has(
-      cfg.tickets.supportRole
-    ) ||
-    hasManageChannels(i);
-
-  if (!allowed)
-    return i.reply({
-      content:
-        "❌ You don't have permission to remove users.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const user = i.options.getUser("user");
-
-  if (user.id === data.owner)
-    return i.reply({
-      content:
-        "❌ You can't remove the ticket owner.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  await i.channel.permissionOverwrites.delete(
-    user.id
-  ).catch(() => {});
-
-  return i.reply({
-    content: `✅ ${user} was removed from the ticket.`
-  });
-}
-
-/* =========================================================
-   EMBED CREATOR
-   ========================================================= */
-
-const pendingEmbeds = new Map();
-const pendingEventEdits = new Map();
-
-function embedCreateModal() {
-  const m = new ModalBuilder()
-    .setCustomId("jrc_embed_create")
-    .setTitle("Create Announcement Embed");
-
-  const inputs = [
-    [
-      "title",
-      "Title",
-      "",
-      TextInputStyle.Short,
-      true,
-      256
-    ],
-    [
-      "description",
-      "Description",
-      "",
-      TextInputStyle.Paragraph,
-      true,
-      4000
-    ],
-    [
-      "color",
-      "Color",
-      ACCENT,
-      TextInputStyle.Short,
-      false,
-      7
-    ],
-    [
-      "image",
-      "Image URL",
-      "",
-      TextInputStyle.Short,
-      false,
-      1000
-    ],
-    [
-      "footer",
-      "Footer",
-      "",
-      TextInputStyle.Short,
-      false,
-      256
-    ]
-  ];
-
-  for (const [
-    id,
-    label,
-    value,
-    style,
-    required,
-    max
-  ] of inputs) {
-    m.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(id)
-          .setLabel(label)
-          .setStyle(style)
-          .setRequired(required)
-          .setMaxLength(max)
-          .setValue(value)
-      )
-    );
-  }
-
-  return m;
-}
-
-function embedEditModal(record) {
-  const m = new ModalBuilder()
-    .setCustomId(`jrc_embed_edit_${record.id}`)
-    .setTitle("Edit Announcement Embed");
-
-  const fields = [
-    [
-      "title",
-      "Title",
-      record.title,
-      TextInputStyle.Short,
-      true,
-      256
-    ],
-    [
-      "description",
-      "Description",
-      record.description,
-      TextInputStyle.Paragraph,
-      true,
-      4000
-    ],
-    [
-      "color",
-      "Color",
-      record.color || ACCENT,
-      TextInputStyle.Short,
-      false,
-      7
-    ],
-    [
-      "image",
-      "Image URL",
-      record.image || "",
-      TextInputStyle.Short,
-      false,
-      1000
-    ],
-    [
-      "footer",
-      "Footer",
-      record.footer || "",
-      TextInputStyle.Short,
-      false,
-      256
-    ]
-  ];
-
-  for (const [
-    id,
-    label,
-    val,
-    style,
-    req,
-    max
-  ] of fields) {
-    m.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(id)
-          .setLabel(label)
-          .setStyle(style)
-          .setRequired(req)
-          .setMaxLength(max)
-          .setValue(String(val).slice(0, max))
-      )
-    );
-  }
-
-  return m;
-}
-
-async function handleEmbed(i) {
-  const sub = i.options.getSubcommand();
-  const cfg = guildConfig(i.guild.id);
-
-  if (!hasManageMessages(i))
-    return i.reply({
-      content:
-        "❌ Manage Messages or Administrator is required.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  if (sub === "create") {
-    const ch = i.options.getChannel("channel");
-    const thumb =
-      i.options.getString("thumbnail") || null;
-
-    if (thumb && !validImage(thumb))
-      return i.reply({
-        content: "❌ Invalid thumbnail URL.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    pendingEmbeds.set(i.user.id, {
-      channelId: ch.id,
-      thumbnail: thumb
-    });
-
-    return i.showModal(embedCreateModal());
-  }
-
-  const id = i.options.getString("id");
-  const record = cfg.embeds.find(
-    x => x.id === id
-  );
-
-  if (!record)
-    return i.reply({
-      content: "❌ Saved embed not found.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  if (sub === "preview") {
-    return i.reply({
-      embeds: [buildSavedEmbed(record)],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "delete") {
-    const ch = i.guild.channels.cache.get(
-      record.channelId
-    );
-
-    if (ch?.isTextBased())
-      await ch.messages
-        .delete(record.messageId)
-        .catch(() => {});
-
-    cfg.embeds = cfg.embeds.filter(
-      x => x.id !== id
-    );
-
-    saveConfig();
-
-    return i.reply({
-      content: `🗑️ Embed **${id}** deleted.`,
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "edit") {
-    pendingEmbeds.set(i.user.id, {
-      recordId: id,
-      channelId: record.channelId,
-      thumbnail: record.thumbnail || null
-    });
-
-    return i.showModal(
-      embedEditModal(record)
-    );
-  }
-}
-
-async function submitEmbed(i, editing = false) {
-  const cfg = guildConfig(i.guild.id);
-  const pending =
-    pendingEmbeds.get(i.user.id) || {};
-
-  const title =
-    i.fields.getTextInputValue("title");
-
-  const description =
-    i.fields.getTextInputValue("description");
-
-  const color =
-    i.fields.getTextInputValue("color") ||
-    ACCENT;
-
-  const image =
-    i.fields.getTextInputValue("image") ||
-    null;
-
-  const footer =
-    i.fields.getTextInputValue("footer") ||
-    null;
-
-  if (!validColor(color))
-    return i.reply({
-      content:
-        "❌ Invalid color. Use `#5865F2`.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  if (
-    image &&
-    !validImage(image)
-  )
-    return i.reply({
-      content:
-        "❌ Invalid image URL.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const data = {
-    title,
-    description,
-    color: normColor(color),
-    image,
-    thumbnail: pending.thumbnail || null,
-    footer
   };
-
-  if (editing) {
-    const id = i.customId.replace(
-      "jrc_embed_edit_",
-      ""
-    );
-
-    const r = cfg.embeds.find(
-      x => x.id === id
-    );
-
-    if (!r)
-      return i.reply({
-        content:
-          "❌ Embed no longer exists.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    Object.assign(r, data);
-
-    const ch = i.guild.channels.cache.get(
-      r.channelId
-    );
-
-    const msg = await ch?.messages
-      .fetch(r.messageId)
-      .catch(() => null);
-
-    if (!msg)
-      return i.reply({
-        content:
-          "❌ Original embed message could not be found.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    await msg.edit({
-      embeds: [buildSavedEmbed(r)]
-    });
-
-    saveConfig();
-    pendingEmbeds.delete(i.user.id);
-
-    return i.reply({
-      content: `✅ Embed **${id}** updated.`,
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  const channel = i.guild.channels.cache.get(
-    pending.channelId
-  );
-
-  if (!channel?.isTextBased())
-    return i.reply({
-      content:
-        "❌ Target channel could not be found.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const id =
-    `${Date.now().toString(36)}${Math.random()
-      .toString(36)
-      .slice(2, 6)}`;
-
-  const record = {
-    id,
-    messageId: null,
-    channelId: channel.id,
-    title,
-    description,
-    color: normColor(color),
-    image,
-    thumbnail: pending.thumbnail || null,
-    footer,
-    createdBy: i.user.id,
-    createdAt: Date.now()
-  };
-
-  const msg = await channel.send({
-    embeds: [buildSavedEmbed(record)]
-  });
-
-  record.messageId = msg.id;
-
-  cfg.embeds.push(record);
-  saveConfig();
-  pendingEmbeds.delete(i.user.id);
-
-  return i.reply({
-    content: `✅ Embed created.\n**ID:** \`${id}\``,
-    flags: MessageFlags.Ephemeral
-  });
-}
-
-/* =========================================================
-   SERVER SETUP
-   ========================================================= */
-
-async function findOrCreateCategory(
-  guild,
-  name
-) {
-  const existing = guild.channels.cache.find(
-    c =>
-      c.type === ChannelType.GuildCategory &&
-      c.name.toLowerCase() ===
-        name.toLowerCase()
-  );
-
-  if (existing) return existing;
-
-  return guild.channels.create({
-    name,
-    type: ChannelType.GuildCategory
-  });
-}
-
-async function findOrCreateText(
-  guild,
-  name,
-  parent = null
-) {
-  const existing = guild.channels.cache.find(
-    c =>
-      c.type === ChannelType.GuildText &&
-      c.name.toLowerCase() ===
-        name.toLowerCase()
-  );
-
-  if (existing) return existing;
-
-  return guild.channels.create({
-    name,
-    type: ChannelType.GuildText,
-    parent: parent?.id || undefined
-  });
-}
-
-async function handleServer(i) {
-  if (!hasManageChannels(i))
-    return i.reply({
-      content:
-        "❌ Manage Channels or Administrator is required.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const g = i.guild;
-  const cfg = guildConfig(g.id);
-
-  const info =
-    await findOrCreateCategory(
-      g,
-      "JRC • INFORMATION"
-    );
-
-  const community =
-    await findOrCreateCategory(
-      g,
-      "JRC • COMMUNITY"
-    );
-
-  const support =
-    await findOrCreateCategory(
-      g,
-      "JRC • SUPPORT"
-    );
-
-  const rules =
-    await findOrCreateText(
-      g,
-      "rules",
-      info
-    );
-
-  const announcements =
-    await findOrCreateText(
-      g,
-      "announcements",
-      info
-    );
-
-  const general =
-    await findOrCreateText(
-      g,
-      "general",
-      community
-    );
-
-  const botcmd =
-    await findOrCreateText(
-      g,
-      "bot-commands",
-      community
-    );
-
-  const tickets =
-    await findOrCreateText(
-      g,
-      "tickets",
-      support
-    );
-
-  const logs =
-    await findOrCreateText(
-      g,
-      "jrc-logs",
-      null
-    );
-
-  if (!cfg.tickets.category)
-    cfg.tickets.category = support.id;
-
-  if (!cfg.logs.channel)
-    cfg.logs.channel = logs.id;
-
-  cfg.serverSetup.completed = true;
-
-  saveConfig();
-
-  return i.reply({
-    embeds: [
-      baseEmbed("#57F287")
-        .setTitle(
-          "⚙️ JRC Server Setup Complete"
-        )
-        .setDescription(
-          "JRC checked the server and created only missing recommended channels/categories. Existing channels were not deleted or renamed."
-        )
-        .addFields(
-          {
-            name: "📖 Information",
-            value: `${rules}\n${announcements}`
-          },
-          {
-            name: "💬 Community",
-            value: `${general}\n${botcmd}`
-          },
-          {
-            name: "🎫 Support",
-            value: `${tickets}`
-          },
-          {
-            name: "📜 Logs",
-            value: `${logs}`
-          }
-        )
-    ],
-    flags: MessageFlags.Ephemeral
-  });
-}
-
-/* =========================================================
-   EVENTS
-   ========================================================= */
-
-function eventModal(customId, ev) {
-  const m = new ModalBuilder()
-    .setCustomId(customId)
-    .setTitle("Edit Event");
-
-  const fields = [
-    [
-      "title",
-      "Title",
-      ev.title,
-      TextInputStyle.Short,
-      true,
-      256
-    ],
-    [
-      "description",
-      "Description",
-      ev.description,
-      TextInputStyle.Paragraph,
-      true,
-      4000
-    ],
-    [
-      "date",
-      "Date / Time",
-      ev.date,
-      TextInputStyle.Short,
-      true,
-      256
-    ]
-  ];
-
-  for (const [
-    id,
-    label,
-    value,
-    style,
-    required,
-    max
-  ] of fields) {
-    m.addComponents(
-      new ActionRowBuilder().addComponents(
-        new TextInputBuilder()
-          .setCustomId(id)
-          .setLabel(label)
-          .setStyle(style)
-          .setRequired(required)
-          .setMaxLength(max)
-          .setValue(String(value).slice(0, max))
-      )
-    );
-  }
-
-  return m;
-}
-
-async function handleEvent(i) {
-  const sub = i.options.getSubcommand();
-  const cfg = guildConfig(i.guild.id);
-
-  if (!hasManageEvents(i))
-    return i.reply({
-      content:
-        "❌ Manage Events, Manage Server, or Administrator is required.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  if (sub === "create") {
-    const ch =
-      i.options.getChannel("channel") ||
-      i.channel;
-
-    const record = {
-      id:
-        `${Date.now().toString(36)}${Math.random()
-          .toString(36)
-          .slice(2, 6)}`,
-
-      messageId: null,
-      channelId: ch.id,
-      title: i.options.getString("title"),
-      date: i.options.getString("date"),
-      description:
-        i.options.getString("description"),
-      attendees: [],
-      cancelled: false,
-      createdBy: i.user.id,
-      createdAt: Date.now()
-    };
-
-    const msg = await ch.send({
-      embeds: [
-        eventEmbed(record, i.guild)
-      ],
-      components: [
-        eventButtons(record.id)
-      ]
-    });
-
-    record.messageId = msg.id;
-    cfg.events.push(record);
-    saveConfig();
-
-    return i.reply({
-      content:
-        `🎉 Event created in ${ch}.\n` +
-        `**Event ID:** \`${record.id}\``,
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  const id =
-    i.options.getString("id");
-
-  const ev = cfg.events.find(
-    x => x.id === id
-  );
-
-  if (!ev)
-    return i.reply({
-      content: "❌ Event not found.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  if (sub === "edit") {
-    pendingEventEdits.set(
-      i.user.id,
-      id
-    );
-
-    return i.showModal(
-      eventModal(
-        `jrc_event_edit_${id}`,
-        ev
-      )
-    );
-  }
-
-  if (sub === "cancel") {
-    ev.cancelled = true;
-
-    const ch =
-      i.guild.channels.cache.get(
-        ev.channelId
-      );
-
-    const msg =
-      await ch?.messages
-        .fetch(ev.messageId)
-        .catch(() => null);
-
-    if (msg) {
-      await msg.edit({
-        embeds: [
-          eventEmbed(
-            ev,
-            i.guild
-          )
-        ],
-        components: [
-          eventButtons(
-            ev.id,
-            true
-          )
-        ]
-      });
-    }
-
-    saveConfig();
-
-    return i.reply({
-      content:
-        `❌ Event **${id}** cancelled.`,
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "list") {
-    const active =
-      cfg.events.filter(
-        x => !x.cancelled
-      );
-
-    if (!active.length)
-      return i.reply({
-        content:
-          "📭 There are no active events.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    const embed = baseEmbed()
-      .setTitle("🎉 Active Events")
-      .setDescription(
-        active
-          .map(
-            x =>
-              `**${x.title}**\n📅 ${x.date}\n🆔 \`${x.id}\`\n👥 ${x.attendees.length} RSVP(s)`
-          )
-          .join("\n\n")
-      );
-
-    return i.reply({
-      embeds: [embed],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-}
-
-async function submitEventEdit(i) {
-  const id =
-    i.customId.replace(
-      "jrc_event_edit_",
-      ""
-    );
-
-  const cfg =
-    guildConfig(i.guild.id);
-
-  const ev =
-    cfg.events.find(
-      x => x.id === id
-    );
-
-  if (!ev)
-    return i.reply({
-      content:
-        "❌ Event not found.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  ev.title =
-    i.fields.getTextInputValue(
-      "title"
-    );
-
-  ev.description =
-    i.fields.getTextInputValue(
-      "description"
-    );
-
-  ev.date =
-    i.fields.getTextInputValue(
-      "date"
-    );
-
-  const ch =
-    i.guild.channels.cache.get(
-      ev.channelId
-    );
-
-  const msg =
-    await ch?.messages
-      .fetch(ev.messageId)
-      .catch(() => null);
-
-  if (msg) {
-    await msg.edit({
-      embeds: [
-        eventEmbed(
-          ev,
-          i.guild
-        )
-      ],
-      components: [
-        eventButtons(
-          ev.id,
-          ev.cancelled
-        )
-      ]
-    });
-  }
-
-  saveConfig();
-
-  pendingEventEdits.delete(
-    i.user.id
-  );
-
-  return i.reply({
-    content:
-      `✅ Event **${id}** updated.`,
-    flags: MessageFlags.Ephemeral
-  });
-}
-
-async function handleEventRSVP(i) {
-  const id =
-    i.customId.replace(
-      "jrc_event_rsvp_",
-      ""
-    );
-
-  const cfg =
-    guildConfig(i.guild.id);
-
-  const ev =
-    cfg.events.find(
-      x => x.id === id
-    );
-
-  if (!ev || ev.cancelled)
-    return i.reply({
-      content:
-        "❌ This event is no longer active.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const idx =
-    ev.attendees.indexOf(
-      i.user.id
-    );
-
-  if (idx >= 0) {
-    ev.attendees.splice(
-      idx,
-      1
-    );
-
-    await i.reply({
-      content:
-        "❌ RSVP removed.",
-      flags: MessageFlags.Ephemeral
-    });
-  } else {
-    ev.attendees.push(
-      i.user.id
-    );
-
-    await i.reply({
-      content:
-        "✅ You're on the RSVP list!",
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  saveConfig();
-
-  const msg =
-    await i.message.fetch()
-      .catch(() => null);
-
-  if (msg) {
-    await msg.edit({
-      embeds: [
-        eventEmbed(
-          ev,
-          i.guild
-        )
-      ],
-      components: [
-        eventButtons(
-          ev.id
-        )
-      ]
-    }).catch(() => {});
-  }
-}
-
-/* =========================================================
-   EXISTING HANDLERS
-   ========================================================= */
-
-async function handleJRC(i) {
-  const cfg =
-    guildConfig(i.guild.id);
-
-  const sub =
-    i.options.getSubcommand();
-
-  if (sub === "help") {
-    return i.reply({
-      embeds: [
-        baseEmbed()
-          .setTitle("🤖 JRC Bot")
-          .setDescription(
-            "Professional all-in-one Discord server management."
-          )
-          .addFields(
-            {
-              name: "🛠️ Moderation",
-              value:
-                "`/mod` • `/automod` • `/logs`"
-            },
-            {
-              name: "🎫 Community",
-              value:
-                "`/ticket` • `/event` • `/reactionrole`"
-            },
-            {
-              name: "⚙️ Setup",
-              value:
-                "`/server setup` • `/welcome` • `/goodbye`"
-            },
-            {
-              name: "🛡️ Security",
-              value:
-                "`/antinuke` • `/raid`"
-            },
-            {
-              name: "🎨 Tools",
-              value:
-                "`/embed` • `/utility` • `/fun`"
-            }
-          )
-      ],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "settings") {
-    return i.reply({
-      embeds: [
-        baseEmbed()
-          .setTitle("⚙️ Server Settings")
-          .addFields(
-            {
-              name: "👋 Welcome",
-              value: cfg.welcome.enabled
-                ? "🟢 Enabled"
-                : "🔴 Disabled",
-              inline: true
-            },
-            {
-              name: "👋 Goodbye",
-              value: cfg.goodbye.enabled
-                ? "🟢 Enabled"
-                : "🔴 Disabled",
-              inline: true
-            },
-            {
-              name: "🛡️ AutoMod",
-              value: cfg.automod.enabled
-                ? "🟢 Enabled"
-                : "🔴 Disabled",
-              inline: true
-            },
-            {
-              name: "📜 Logs",
-              value: cfg.logs.enabled
-                ? "🟢 Enabled"
-                : "🔴 Disabled",
-              inline: true
-            },
-            {
-              name: "🎫 Tickets",
-              value: cfg.tickets.enabled
-                ? "🟢 Enabled"
-                : "🔴 Disabled",
-              inline: true
-            },
-            {
-              name: "🛡️ Anti-Nuke",
-              value: cfg.antinuke.enabled
-                ? "🟢 Enabled"
-                : "🔴 Disabled",
-              inline: true
-            },
-            {
-              name: "🚨 Raid",
-              value: cfg.raid.enabled
-                ? "🟢 Enabled"
-                : "🔴 Disabled",
-              inline: true
-            }
-          )
-      ],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "about") {
-    return i.reply({
-      embeds: [
-        baseEmbed()
-          .setTitle("🤖 JRC Bot")
-          .setDescription(
-            "JRC Bot is a single-file Discord management bot built for moderation, automation, support, events and server utilities."
-          )
-          .addFields({
-            name: "✨ Style",
-            value:
-              "Clean • Modern • Professional"
-          })
-      ],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "status") {
-    return i.reply({
-      embeds: [
-        baseEmbed("#57F287")
-          .setTitle("🟢 JRC Bot Status")
-          .addFields(
-            {
-              name: "Latency",
-              value: `${client.ws.ping}ms`,
-              inline: true
-            },
-            {
-              name: "Servers",
-              value: `${client.guilds.cache.size}`,
-              inline: true
-            },
-            {
-              name: "Uptime",
-              value: `${Math.floor(
-                client.uptime / 1000
-              )}s`,
-              inline: true
-            }
-          )
-      ],
-      flags: MessageFlags.Ephemeral
-    });
-  }
 }
 
 async function handleGreetingCommand(
-  i,
+  interaction,
   type
 ) {
-  const cfg =
-    guildConfig(i.guild.id);
+  if (!hasManageGuild(interaction)) {
+    return safeReply(interaction, {
+      content:
+        "❌ You need **Manage Server** or **Administrator**.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
 
   const sub =
-    i.options.getSubcommand();
+    interaction.options.getSubcommand();
+
+  const cfg =
+    guildConfig(interaction.guild.id)[type];
 
   if (sub === "setup") {
-    if (!hasManageMessages(i))
-      return i.reply({
-        content:
-          "❌ Manage Messages or Administrator is required.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    return i.reply(
+    return interaction.reply(
       greetingPanel(
         type,
-        i.guild
+        interaction.guild
       )
     );
   }
 
   if (sub === "disable") {
-    cfg[type].enabled = false;
+    cfg.enabled = false;
     saveConfig();
 
-    return i.reply({
-      content:
-        `🔴 ${type} disabled.`,
+    return sendEmbed(
+      interaction,
+      `🔴 ${type} disabled`,
+      `The **${type}** system is now disabled.`,
+      DANGER,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "channel") {
+    const channel =
+      interaction.options.getChannel(
+        "channel"
+      );
+
+    cfg.channel = channel.id;
+    saveConfig();
+
+    return sendEmbed(
+      interaction,
+      "📢 Channel Updated",
+      `The ${type} channel is now ${channel}.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "message") {
+    const embed = baseEmbed(
+      cfg.color
+    )
+      .setTitle(
+        `💬 ${type} Configuration`
+      )
+      .addFields(
+        {
+          name: "Title",
+          value: clip(cfg.title, 1024)
+        },
+        {
+          name: "Description",
+          value: clip(
+            cfg.description,
+            1024
+          )
+        },
+        {
+          name: "Message",
+          value: clip(
+            cfg.message,
+            1024
+          )
+        },
+        {
+          name: "Image / GIF",
+          value:
+            cfg.image || "None"
+        }
+      );
+
+    return interaction.reply({
+      embeds: [embed],
       flags: MessageFlags.Ephemeral
     });
   }
 
   if (sub === "preview") {
-    return i.reply({
+    return interaction.reply({
       embeds: [
         buildGreetingEmbed(
           type,
-          i.member,
-          cfg[type]
-        )
-      ],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "test") {
-    if (!cfg[type].channel)
-      return i.reply({
-        content:
-          `❌ Configure a ${type} channel first.`,
-        flags: MessageFlags.Ephemeral
-      });
-
-    const ch =
-      i.guild.channels.cache.get(
-        cfg[type].channel
-      );
-
-    if (!ch?.isTextBased())
-      return i.reply({
-        content:
-          "❌ Configured channel is unavailable.",
-        flags: MessageFlags.Ephemeral
-      });
-
-    await ch.send({
-      embeds: [
-        buildGreetingEmbed(
-          type,
-          i.member,
-          cfg[type]
-        )
-      ]
-    });
-
-    return i.reply({
-      content:
-        `✅ ${type} test sent.`,
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "message") {
-    return i.reply({
-      content:
-        cfg[type].message,
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "channel") {
-    return i.reply({
-      content:
-        `Select the ${type} channel below.`,
-      components: [
-        new ActionRowBuilder().addComponents(
-          new ChannelSelectMenuBuilder()
-            .setCustomId(
-              `jrc_select_channel_${type}`
-            )
-            .setPlaceholder(
-              `Select ${type} channel`
-            )
-            .addChannelTypes(
-              ChannelType.GuildText
-            )
+          interaction.member,
+          cfg
         )
       ],
       flags: MessageFlags.Ephemeral
@@ -2846,117 +1280,159 @@ async function handleGreetingCommand(
   }
 }
 
+/* =========================================================
+   MODERATION
+   ========================================================= */
+
 async function handleMod(i) {
+  if (!hasModerate(i)) {
+    return safeReply(i, {
+      content:
+        "❌ You need **Moderate Members** or **Administrator**.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
   const sub =
     i.options.getSubcommand();
 
   if (
-    !i.memberPermissions?.has(
-      PermissionFlagsBits.ModerateMembers
-    ) &&
-    !hasAdmin(i)
-  )
-    return i.reply({
-      content:
-        "❌ Moderate Members or Administrator is required.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  if (sub === "ban") {
+    sub === "ban" ||
+    sub === "kick"
+  ) {
     const user =
       i.options.getUser("user");
+
+    const reason =
+      i.options.getString("reason") ||
+      "No reason provided.";
 
     const member =
       await i.guild.members
         .fetch(user.id)
         .catch(() => null);
 
-    if (!member?.bannable)
-      return i.reply({
+    if (!member) {
+      return safeReply(i, {
         content:
-          "❌ I cannot ban that member.",
+          "❌ I couldn't find that member.",
         flags: MessageFlags.Ephemeral
       });
+    }
 
-    const reason =
-      i.options.getString("reason") ||
-      "No reason provided";
-
-    await member.ban({ reason });
-
-    await logAction(
-      i.guild,
-      "🔨 MEMBER BANNED",
-      `${user} was banned by ${i.user}.`,
-      "#ED4245",
-      [
-        {
-          name: "Reason",
-          value: reason
-        }
-      ]
-    );
-
-    return i.reply(
-      `🔨 ${user} has been banned.`
-    );
-  }
-
-  if (sub === "kick") {
-    const user =
-      i.options.getUser("user");
-
-    const member =
-      await i.guild.members
-        .fetch(user.id)
-        .catch(() => null);
-
-    if (!member?.kickable)
-      return i.reply({
+    if (
+      member.id === i.user.id
+    ) {
+      return safeReply(i, {
         content:
-          "❌ I cannot kick that member.",
+          "❌ You can't moderate yourself.",
         flags: MessageFlags.Ephemeral
       });
+    }
 
-    const reason =
-      i.options.getString("reason") ||
-      "No reason provided";
+    if (
+      member.id ===
+      i.guild.ownerId
+    ) {
+      return safeReply(i, {
+        content:
+          "❌ The server owner cannot be moderated by JRC.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (
+      sub === "ban" &&
+      !member.bannable
+    ) {
+      return safeReply(i, {
+        content:
+          "❌ I can't ban that member. Check my role hierarchy.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (
+      sub === "kick" &&
+      !member.kickable
+    ) {
+      return safeReply(i, {
+        content:
+          "❌ I can't kick that member. Check my role hierarchy.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (sub === "ban") {
+      await member.ban({
+        reason
+      });
+
+      await logAction(
+        i.guild,
+        "🔨 MEMBER BANNED",
+        `${user} was banned.`,
+        DANGER,
+        [
+          {
+            name: "👤 User",
+            value: `${user} (${user.id})`
+          },
+          {
+            name: "🛡️ Moderator",
+            value: `${i.user}`
+          },
+          {
+            name: "📝 Reason",
+            value: clip(reason)
+          }
+        ]
+      );
+
+      return sendEmbed(
+        i,
+        "🔨 Member Banned",
+        `**${user.username}** has been banned.`,
+        DANGER,
+        { ephemeral: true }
+      );
+    }
 
     await member.kick(reason);
 
     await logAction(
       i.guild,
       "👢 MEMBER KICKED",
-      `${user} was kicked by ${i.user}.`,
-      "#ED4245",
+      `${user} was kicked.`,
+      DANGER,
       [
         {
-          name: "Reason",
-          value: reason
+          name: "👤 User",
+          value: `${user} (${user.id})`
+        },
+        {
+          name: "🛡️ Moderator",
+          value: `${i.user}`
+        },
+        {
+          name: "📝 Reason",
+          value: clip(reason)
         }
       ]
     );
 
-    return i.reply(
-      `👢 ${user} has been kicked.`
+    return sendEmbed(
+      i,
+      "👢 Member Kicked",
+      `**${user.username}** has been kicked.`,
+      DANGER,
+      { ephemeral: true }
     );
   }
 
   if (sub === "timeout") {
     const user =
       i.options.getUser("user");
-
-    const member =
-      await i.guild.members
-        .fetch(user.id)
-        .catch(() => null);
-
-    if (!member?.moderatable)
-      return i.reply({
-        content:
-          "❌ I cannot timeout that member.",
-        flags: MessageFlags.Ephemeral
-      });
 
     const minutes =
       i.options.getInteger(
@@ -2965,7 +1441,20 @@ async function handleMod(i) {
 
     const reason =
       i.options.getString("reason") ||
-      "No reason provided";
+      "No reason provided.";
+
+    const member =
+      await i.guild.members
+        .fetch(user.id)
+        .catch(() => null);
+
+    if (!member?.moderatable) {
+      return safeReply(i, {
+        content:
+          "❌ I can't timeout that member. Check role hierarchy.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
 
     await member.timeout(
       minutes * 60000,
@@ -2974,23 +1463,31 @@ async function handleMod(i) {
 
     await logAction(
       i.guild,
-      "⏱️ MEMBER TIMED OUT",
-      `${user} was timed out by ${i.user}.`,
-      "#FEE75C",
+      "⏱️ MEMBER TIMEOUT",
+      `${user} was timed out.`,
+      WARNING,
       [
         {
-          name: "Duration",
-          value: `${minutes} minute(s)`
+          name: "🛡️ Moderator",
+          value: `${i.user}`
         },
         {
-          name: "Reason",
-          value: reason
+          name: "⏱️ Duration",
+          value: `${minutes} minutes`
+        },
+        {
+          name: "📝 Reason",
+          value: clip(reason)
         }
       ]
     );
 
-    return i.reply(
-      `⏱️ ${user} has been timed out for ${minutes} minute(s).`
+    return sendEmbed(
+      i,
+      "⏱️ Member Timed Out",
+      `**${user.username}** was timed out for **${minutes} minutes**.`,
+      WARNING,
+      { ephemeral: true }
     );
   }
 
@@ -3004,17 +1501,14 @@ async function handleMod(i) {
       );
 
     const cfg =
-      guildConfig(
-        i.guild.id
-      );
+      guildConfig(i.guild.id);
 
-    if (!cfg.warnings[user.id])
-      cfg.warnings[user.id] = [];
+    cfg.warnings[user.id] ??= [];
 
     cfg.warnings[user.id].push({
       reason,
       moderator: i.user.id,
-      createdAt: Date.now()
+      timestamp: Date.now()
     });
 
     saveConfig();
@@ -3022,18 +1516,26 @@ async function handleMod(i) {
     await logAction(
       i.guild,
       "⚠️ MEMBER WARNED",
-      `${user} was warned by ${i.user}.`,
-      "#FEE75C",
+      `${user} was warned.`,
+      WARNING,
       [
         {
-          name: "Reason",
-          value: reason
+          name: "🛡️ Moderator",
+          value: `${i.user}`
+        },
+        {
+          name: "📝 Reason",
+          value: clip(reason)
         }
       ]
     );
 
-    return i.reply(
-      `⚠️ ${user} has been warned.`
+    return sendEmbed(
+      i,
+      "⚠️ Warning Added",
+      `**${user.username}** has been warned.`,
+      WARNING,
+      { ephemeral: true }
     );
   }
 
@@ -3041,30 +1543,40 @@ async function handleMod(i) {
     const user =
       i.options.getUser("user");
 
-    const cfg =
+    const warnings =
       guildConfig(
         i.guild.id
-      );
+      ).warnings[user.id] || [];
 
-    const warnings =
-      cfg.warnings[user.id] ||
-      [];
+    if (!warnings.length) {
+      return sendEmbed(
+        i,
+        "✅ No Warnings",
+        `**${user.username}** has no warnings.`,
+        SUCCESS,
+        { ephemeral: true }
+      );
+    }
+
+    const text =
+      warnings
+        .map(
+          (w, index) =>
+            `**${index + 1}.** ${clip(
+              w.reason,
+              500
+            )} — <@${w.moderator}>`
+        )
+        .join("\n");
 
     return i.reply({
       embeds: [
-        baseEmbed("#FEE75C")
+        baseEmbed(WARNING)
           .setTitle(
-            `⚠️ Warnings • ${user.tag}`
+            `⚠️ Warnings • ${user.username}`
           )
           .setDescription(
-            warnings.length
-              ? warnings
-                  .map(
-                    (w, n) =>
-                      `**${n + 1}.** ${w.reason}`
-                  )
-                  .join("\n")
-              : "No warnings."
+            clip(text, 4000)
           )
       ],
       flags: MessageFlags.Ephemeral
@@ -3072,17 +1584,18 @@ async function handleMod(i) {
   }
 
   if (sub === "clear") {
+    if (!hasManageMessages(i)) {
+      return safeReply(i, {
+        content:
+          "❌ You need **Manage Messages**.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
     const amount =
       i.options.getInteger(
         "amount"
       );
-
-    if (!i.channel?.isTextBased())
-      return i.reply({
-        content:
-          "❌ This isn't a text channel.",
-        flags: MessageFlags.Ephemeral
-      });
 
     const deleted =
       await i.channel.bulkDelete(
@@ -3093,27 +1606,30 @@ async function handleMod(i) {
     await logAction(
       i.guild,
       "🧹 MESSAGES CLEARED",
-      `${i.user} cleared ${deleted.size} message(s) in ${i.channel}.`,
-      "#FEE75C"
+      `${i.user} deleted **${deleted.size}** messages in ${i.channel}.`,
+      ACCENT
     );
 
-    return i.reply({
-      content:
-        `🧹 Deleted ${deleted.size} message(s).`,
-      flags: MessageFlags.Ephemeral
-    });
+    return sendEmbed(
+      i,
+      "🧹 Messages Cleared",
+      `Deleted **${deleted.size}** messages.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
   }
 
   if (
     sub === "lock" ||
     sub === "unlock"
   ) {
-    if (!i.channel?.permissionOverwrites)
-      return i.reply({
+    if (!hasManageMessages(i)) {
+      return safeReply(i, {
         content:
-          "❌ This channel cannot be locked.",
+          "❌ You need **Manage Messages**.",
         flags: MessageFlags.Ephemeral
       });
+    }
 
     const locked =
       sub === "lock";
@@ -3135,59 +1651,244 @@ async function handleMod(i) {
           ? "locked"
           : "unlocked"
       } ${i.channel}.`,
-      locked
-        ? "#ED4245"
-        : "#57F287"
+      ACCENT
     );
 
-    return i.reply(
+    return sendEmbed(
+      i,
       locked
-        ? "🔒 Channel locked."
-        : "🔓 Channel unlocked."
+        ? "🔒 Channel Locked"
+        : "🔓 Channel Unlocked",
+      locked
+        ? "This channel is now locked."
+        : "This channel is now unlocked.",
+      ACCENT,
+      { ephemeral: true }
     );
   }
 }
 
-async function handleAutoMod(i) {
-  const cfg =
-    guildConfig(
-      i.guild.id
-    ).automod;
+/* =========================================================
+   LOG COMMANDS
+   ========================================================= */
+
+async function handleLogs(i) {
+  if (!hasManageGuild(i)) {
+    return safeReply(i, {
+      content:
+        "❌ You need **Manage Server** or **Administrator**.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
 
   const sub =
     i.options.getSubcommand();
 
-  if (!hasManageMessages(i))
-    return i.reply({
+  const cfg =
+    guildConfig(i.guild.id).logs;
+
+  if (sub === "setup") {
+    const channel =
+      i.options.getChannel(
+        "channel"
+      );
+
+    cfg.channel = channel.id;
+    cfg.enabled = true;
+
+    saveConfig();
+
+    return sendEmbed(
+      i,
+      "📋 Logs Configured",
+      `JRC moderation logs are now being sent to ${channel}.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "disable") {
+    cfg.enabled = false;
+    saveConfig();
+
+    return sendEmbed(
+      i,
+      "🔴 Logs Disabled",
+      "JRC moderation logging has been disabled.",
+      DANGER,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "test") {
+    await logAction(
+      i.guild,
+      "🧪 LOG TEST",
+      `Log system tested by ${i.user}.`,
+      ACCENT
+    );
+
+    return sendEmbed(
+      i,
+      "🧪 Test Sent",
+      "The test log was sent to your configured log channel.",
+      SUCCESS,
+      { ephemeral: true }
+    );
+  }
+}
+
+/* =========================================================
+   SECURITY
+   ========================================================= */
+
+async function handleSecurity(i) {
+  if (!hasManageGuild(i)) {
+    return safeReply(i, {
       content:
-        "❌ Manage Messages or Administrator is required.",
+        "❌ You need **Manage Server** or **Administrator**.",
       flags: MessageFlags.Ephemeral
     });
+  }
+
+  const sub =
+    i.options.getSubcommand();
+
+  const cfg =
+    guildConfig(i.guild.id)
+      .security;
+
+  if (sub === "status") {
+    const embed =
+      baseEmbed()
+        .setTitle("🔐 JRC Security")
+        .addFields(
+          {
+            name: "🚫 Anti-Spam",
+            value: cfg.antiSpam
+              ? "🟢 Enabled"
+              : "🔴 Disabled",
+            inline: true
+          },
+          {
+            name: "🔗 Anti-Link",
+            value: cfg.antiLink
+              ? "🟢 Enabled"
+              : "🔴 Disabled",
+            inline: true
+          },
+          {
+            name: "🚨 Anti-Raid",
+            value: cfg.antiRaid
+              ? "🟢 Enabled"
+              : "🔴 Disabled",
+            inline: true
+          },
+          {
+            name: "📢 Mention Protection",
+            value: cfg.antiMention
+              ? "🟢 Enabled"
+              : "🔴 Disabled",
+            inline: true
+          }
+        );
+
+    return i.reply({
+      embeds: [embed],
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  const enabled =
+    i.options.getBoolean(
+      "enabled"
+    );
+
+  if (sub === "antispam") {
+    cfg.antiSpam = enabled;
+  }
+
+  if (sub === "antilink") {
+    cfg.antiLink = enabled;
+  }
+
+  if (sub === "antiraid") {
+    cfg.antiRaid = enabled;
+  }
+
+  if (sub === "antimention") {
+    cfg.antiMention = enabled;
+  }
+
+  saveConfig();
+
+  return sendEmbed(
+    i,
+    "🔐 Security Updated",
+    `**${sub}** is now ${
+      enabled
+        ? "🟢 enabled"
+        : "🔴 disabled"
+    }.`,
+    enabled
+      ? SUCCESS
+      : DANGER,
+    { ephemeral: true }
+  );
+}
+
+/* =========================================================
+   AUTOMOD
+   ========================================================= */
+
+async function handleAutoMod(i) {
+  if (!hasManageGuild(i)) {
+    return safeReply(i, {
+      content:
+        "❌ You need **Manage Server**.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  const sub =
+    i.options.getSubcommand();
+
+  const cfg =
+    guildConfig(i.guild.id)
+      .automod;
 
   if (sub === "setup") {
     return i.reply({
       embeds: [
         baseEmbed()
           .setTitle(
-            "🛡️ AutoMod"
+            "🛡️ Automod Configuration"
           )
-          .setDescription(
-            `Status: ${
-              cfg.enabled
+          .addFields(
+            {
+              name: "Status",
+              value: cfg.enabled
                 ? "🟢 Enabled"
                 : "🔴 Disabled"
-            }\n\n` +
-              `Blocked words: ${cfg.words.length}\n` +
-              `Spam: ${
-                cfg.spam.enabled
-                  ? "🟢"
-                  : "🔴"
-              }\n` +
-              `Links: ${
-                cfg.links
-                  ? "🟢"
-                  : "🔴"
-              }`
+            },
+            {
+              name: "Blocked Words",
+              value: cfg.words.length
+                ? cfg.words.join(", ")
+                : "None"
+            },
+            {
+              name: "Spam",
+              value: cfg.spam.enabled
+                ? "🟢 Enabled"
+                : "🔴 Disabled"
+            },
+            {
+              name: "Links",
+              value: cfg.links
+                ? "🟢 Enabled"
+                : "🔴 Disabled"
+            }
           )
       ],
       flags: MessageFlags.Ephemeral
@@ -3198,8 +1899,12 @@ async function handleAutoMod(i) {
     cfg.enabled = true;
     saveConfig();
 
-    return i.reply(
-      "🟢 AutoMod enabled."
+    return sendEmbed(
+      i,
+      "🟢 Automod Enabled",
+      "JRC automod is now active.",
+      SUCCESS,
+      { ephemeral: true }
     );
   }
 
@@ -3207,45 +1912,65 @@ async function handleAutoMod(i) {
     cfg.enabled = false;
     saveConfig();
 
-    return i.reply(
-      "🔴 AutoMod disabled."
+    return sendEmbed(
+      i,
+      "🔴 Automod Disabled",
+      "JRC automod is now disabled.",
+      DANGER,
+      { ephemeral: true }
     );
   }
 
   if (sub === "words") {
-    const words =
+    const word =
       i.options
-        .getString("words")
-        .split(",")
-        .map(x => x.trim())
-        .filter(Boolean);
+        .getString("word")
+        .toLowerCase()
+        .trim();
 
-    cfg.words = words;
+    if (!cfg.words.includes(word)) {
+      cfg.words.push(word);
+    }
+
     saveConfig();
 
-    return i.reply({
-      content:
-        `✅ Added ${words.length} blocked word(s).`,
-      flags: MessageFlags.Ephemeral
-    });
+    return sendEmbed(
+      i,
+      "🚫 Blocked Word Added",
+      `Added \`${word}\` to the blocked-word list.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
   }
 
   if (sub === "spam") {
+    cfg.spam.enabled =
+      i.options.getBoolean(
+        "enabled"
+      );
+
     const limit =
       i.options.getInteger(
         "limit"
       );
 
-    cfg.spam.enabled = true;
-    cfg.spam.limit = limit;
+    if (limit) {
+      cfg.spam.limit = limit;
+    }
 
     saveConfig();
 
-    return i.reply({
-      content:
-        `✅ Spam protection set to ${limit} messages.`,
-      flags: MessageFlags.Ephemeral
-    });
+    return sendEmbed(
+      i,
+      "🛡️ Spam Protection Updated",
+      `Spam protection is now ${
+        cfg.spam.enabled
+          ? "🟢 enabled"
+          : "🔴 disabled"
+      }.`,
+      ACCENT,
+      { ephemeral: true }
+    );
   }
 
   if (sub === "links") {
@@ -3256,158 +1981,400 @@ async function handleAutoMod(i) {
 
     saveConfig();
 
-    return i.reply({
+    return sendEmbed(
+      i,
+      "🔗 Link Protection Updated",
+      `Link filtering is now ${
+        cfg.links
+          ? "🟢 enabled"
+          : "🔴 disabled"
+      }.`,
+      ACCENT,
+      { ephemeral: true }
+    );
+  }
+}
+
+/* =========================================================
+   ROLE SYSTEM
+   ========================================================= */
+
+function canManageTargetRole(i, role) {
+  if (!role) return false;
+
+  if (role.managed) return false;
+
+  if (
+    role.id === i.guild.id
+  ) {
+    return false;
+  }
+
+  const botMember =
+    i.guild.members.me;
+
+  if (!botMember) return false;
+
+  if (
+    role.position >=
+    botMember.roles.highest.position
+  ) {
+    return false;
+  }
+
+  if (
+    !isAdmin(i) &&
+    i.member?.roles?.highest?.position <=
+      role.position
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+async function handleRole(i) {
+  if (!hasManageRoles(i)) {
+    return safeReply(i, {
       content:
-        `🔗 Link blocking ${
-          cfg.links
-            ? "enabled"
-            : "disabled"
-        }.`,
+        "❌ You need **Manage Roles** or **Administrator**.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
+  const sub =
+    i.options.getSubcommand();
+
+  if (
+    sub === "add" ||
+    sub === "remove"
+  ) {
+    const user =
+      i.options.getUser("user");
+
+    const role =
+      i.options.getRole("role");
+
+    if (!canManageTargetRole(i, role)) {
+      return safeReply(i, {
+        content:
+          "❌ I can't manage that role. Check the role hierarchy.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    const member =
+      await i.guild.members
+        .fetch(user.id)
+        .catch(() => null);
+
+    if (!member) {
+      return safeReply(i, {
+        content:
+          "❌ Member not found.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (
+      sub === "add"
+    ) {
+      await member.roles.add(
+        role,
+        `JRC role command by ${i.user.tag}`
+      );
+
+      await logAction(
+        i.guild,
+        "🎭 ROLE ADDED",
+        `${role} was added to ${member}.`,
+        SUCCESS,
+        [
+          {
+            name: "Moderator",
+            value: `${i.user}`
+          }
+        ]
+      );
+
+      return sendEmbed(
+        i,
+        "🎭 Role Added",
+        `Added ${role} to ${member}.`,
+        SUCCESS,
+        { ephemeral: true }
+      );
+    }
+
+    await member.roles.remove(
+      role,
+      `JRC role command by ${i.user.tag}`
+    );
+
+    await logAction(
+      i.guild,
+      "🎭 ROLE REMOVED",
+      `${role} was removed from ${member}.`,
+      DANGER,
+      [
+        {
+          name: "Moderator",
+          value: `${i.user}`
+        }
+      ]
+    );
+
+    return sendEmbed(
+      i,
+      "🎭 Role Removed",
+      `Removed ${role} from ${member}.`,
+      DANGER,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "info") {
+    const role =
+      i.options.getRole("role");
+
+    return i.reply({
+      embeds: [
+        baseEmbed(
+          role.hexColor !== "#000000"
+            ? role.hexColor
+            : ACCENT
+        )
+          .setTitle(
+            `🎨 ${role.name}`
+          )
+          .addFields(
+            {
+              name: "ID",
+              value: role.id,
+              inline: true
+            },
+            {
+              name: "Members",
+              value: String(
+                role.members.size
+              ),
+              inline: true
+            },
+            {
+              name: "Position",
+              value: String(
+                role.position
+              ),
+              inline: true
+            },
+            {
+              name: "Mentionable",
+              value: role.mentionable
+                ? "Yes"
+                : "No",
+              inline: true
+            }
+          )
+      ],
       flags: MessageFlags.Ephemeral
     });
   }
 }
 
-async function handleLogs(i) {
-  const cfg =
-    guildConfig(
-      i.guild.id
-    ).logs;
+/* =========================================================
+   AUTOROLE
+   ========================================================= */
+
+async function handleAutoRole(i) {
+  if (!hasManageRoles(i)) {
+    return safeReply(i, {
+      content:
+        "❌ You need **Manage Roles**.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
 
   const sub =
     i.options.getSubcommand();
 
-  if (!hasManageMessages(i))
-    return i.reply({
-      content:
-        "❌ Manage Messages or Administrator is required.",
-      flags: MessageFlags.Ephemeral
-    });
+  const cfg =
+    guildConfig(i.guild.id)
+      .autoRole;
 
   if (sub === "setup") {
-    cfg.enabled = true;
-    cfg.channel = i.channel.id;
+    const role =
+      i.options.getRole("role");
 
+    if (!canManageTargetRole(i, role)) {
+      return safeReply(i, {
+        content:
+          "❌ JRC can't assign that role. Move JRC's bot role above it.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    cfg.role = role.id;
     saveConfig();
 
-    return i.reply({
-      content:
-        `📜 Logs enabled in ${i.channel}.`,
-      flags: MessageFlags.Ephemeral
-    });
+    return sendEmbed(
+      i,
+      "🎭 Autorole Configured",
+      `New members will receive ${role} when autorole is enabled.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "enable") {
+    if (!cfg.role) {
+      return safeReply(i, {
+        content:
+          "❌ Run `/autorole setup` first.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    cfg.enabled = true;
+    saveConfig();
+
+    return sendEmbed(
+      i,
+      "🟢 Autorole Enabled",
+      `New members will automatically receive <@&${cfg.role}>.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
   }
 
   if (sub === "disable") {
     cfg.enabled = false;
     saveConfig();
 
-    return i.reply({
-      content:
-        "🔴 Logs disabled.",
-      flags: MessageFlags.Ephemeral
-    });
+    return sendEmbed(
+      i,
+      "🔴 Autorole Disabled",
+      "Autorole is now disabled.",
+      DANGER,
+      { ephemeral: true }
+    );
   }
 
-  if (sub === "test") {
-    await logAction(
-      i.guild,
-      "🧪 LOG TEST",
-      `${i.user} tested the logging system.`,
-      ACCENT
-    );
-
+  if (sub === "status") {
     return i.reply({
-      content:
-        "✅ Log test sent.",
+      embeds: [
+        baseEmbed()
+          .setTitle("🎭 Autorole")
+          .setDescription(
+            `**Status:** ${
+              cfg.enabled
+                ? "🟢 Enabled"
+                : "🔴 Disabled"
+            }\n` +
+            `**Role:** ${
+              cfg.role
+                ? `<@&${cfg.role}>`
+                : "Not configured"
+            }`
+          )
+      ],
       flags: MessageFlags.Ephemeral
     });
   }
 }
 
+/* =========================================================
+   REACTION / SELF ROLES
+   ========================================================= */
+
 async function handleReactionRole(i) {
-  if (!hasManageMessages(i))
-    return i.reply({
+  if (!hasManageRoles(i)) {
+    return safeReply(i, {
       content:
-        "❌ Manage Messages or Administrator is required.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  const cfg =
-    guildConfig(
-      i.guild.id
-    );
-
-  const sub =
-    i.options.getSubcommand();
-
-  if (sub === "create") {
-    const ch =
-      i.options.getChannel(
-        "channel"
-      );
-
-    const message =
-      i.options.getString(
-        "message"
-      );
-
-    const msg =
-      await ch.send({
-        content: message
-      });
-
-    return i.reply({
-      content:
-        `✅ Reaction role message created.\nID: \`${msg.id}\``,
+        "❌ You need **Manage Roles**.",
       flags: MessageFlags.Ephemeral
     });
   }
 
-  const message =
-    i.options.getString(
-      "message"
-    );
+  const sub =
+    i.options.getSubcommand();
 
-  const emoji =
-    i.options.getString(
-      "emoji"
-    );
+  const cfg =
+    guildConfig(i.guild.id);
 
-  if (sub === "add") {
+  if (sub === "create") {
     const role =
-      i.options.getRole(
-        "role"
+      i.options.getRole("role");
+
+    const emoji =
+      i.options.getString("emoji");
+
+    const text =
+      i.options.getString("text");
+
+    if (!canManageTargetRole(i, role)) {
+      return safeReply(i, {
+        content:
+          "❌ JRC can't manage that role. Check role hierarchy.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    const message =
+      await i.channel.send({
+        embeds: [
+          baseEmbed()
+            .setTitle("🎭 Self Role")
+            .setDescription(text)
+            .addFields({
+              name: "Role",
+              value: `${role}`
+            })
+        ]
+      });
+
+    try {
+      await message.react(
+        emoji
       );
+    } catch {
+      return safeReply(i, {
+        content:
+          "❌ I couldn't use that emoji.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
 
     cfg.reactionRoles.push({
-      message,
+      message: message.id,
       emoji,
       role: role.id
     });
 
     saveConfig();
 
-    const ch =
-      i.channel;
-
-    const msg =
-      await ch.messages
-        .fetch(message)
-        .catch(() => null);
-
-    if (msg)
-      await msg.react(
-        emoji
-      ).catch(() => {});
-
-    return i.reply({
-      content:
-        `✅ Reaction role added for ${role}.`,
-      flags: MessageFlags.Ephemeral
-    });
+    return sendEmbed(
+      i,
+      "🎭 Self Role Created",
+      `React to the message to receive ${role}.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
   }
 
   if (sub === "remove") {
+    const message =
+      i.options.getString(
+        "message"
+      );
+
+    const emoji =
+      i.options.getString(
+        "emoji"
+      );
+
+    const before =
+      cfg.reactionRoles.length;
+
     cfg.reactionRoles =
       cfg.reactionRoles.filter(
         x =>
@@ -3419,29 +2386,46 @@ async function handleReactionRole(i) {
 
     saveConfig();
 
-    return i.reply({
-      content:
-        "🗑️ Reaction role removed.",
-      flags: MessageFlags.Ephemeral
-    });
+    return sendEmbed(
+      i,
+      "🗑️ Self Role Removed",
+      before === cfg.reactionRoles.length
+        ? "No matching self-role was found."
+        : "The self-role configuration was removed.",
+      before === cfg.reactionRoles.length
+        ? WARNING
+        : SUCCESS,
+      { ephemeral: true }
+    );
   }
 
   if (sub === "list") {
+    if (!cfg.reactionRoles.length) {
+      return sendEmbed(
+        i,
+        "🎭 Self Roles",
+        "No self-roles are configured.",
+        ACCENT,
+        { ephemeral: true }
+      );
+    }
+
+    const text =
+      cfg.reactionRoles
+        .map(
+          (x, index) =>
+            `**${index + 1}.** ${x.emoji} → <@&${x.role}> • \`${x.message}\``
+        )
+        .join("\n");
+
     return i.reply({
       embeds: [
         baseEmbed()
           .setTitle(
-            "🎭 Reaction Roles"
+            "🎭 Self Roles"
           )
           .setDescription(
-            cfg.reactionRoles.length
-              ? cfg.reactionRoles
-                  .map(
-                    x =>
-                      `${x.emoji} → <@&${x.role}> • \`${x.message}\``
-                  )
-                  .join("\n")
-              : "No reaction roles configured."
+            clip(text, 4000)
           )
       ],
       flags: MessageFlags.Ephemeral
@@ -3449,20 +2433,240 @@ async function handleReactionRole(i) {
   }
 }
 
-async function handleUtility(i) {
+/* =========================================================
+   EMBED CREATOR
+   ========================================================= */
+
+async function handleEmbed(i) {
+  if (!hasManageGuild(i)) {
+    return safeReply(i, {
+      content:
+        "❌ You need **Manage Server** or **Administrator**.",
+      flags: MessageFlags.Ephemeral
+    });
+  }
+
   const sub =
     i.options.getSubcommand();
 
-  if (sub === "userinfo") {
-    const user =
-      i.options.getUser("user") ||
-      i.user;
+  const cfg =
+    guildConfig(i.guild.id);
+
+  if (sub === "create") {
+    const channel =
+      i.options.getChannel(
+        "channel"
+      );
+
+    const title =
+      i.options.getString(
+        "title"
+      );
+
+    const description =
+      i.options.getString(
+        "description"
+      );
+
+    const color =
+      i.options.getString(
+        "color"
+      ) || ACCENT;
+
+    const image =
+      i.options.getString(
+        "image"
+      );
+
+    const footer =
+      i.options.getString(
+        "footer"
+      ) || "JRC Bot";
+
+    if (!validColor(color)) {
+      return safeReply(i, {
+        content:
+          "❌ Invalid color. Example: `#5865F2`",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    if (
+      image &&
+      !validImage(image)
+    ) {
+      return safeReply(i, {
+        content:
+          "❌ Invalid image/GIF URL.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    const id =
+      `${Date.now().toString(36)}${Math.random()
+        .toString(36)
+        .slice(2, 7)}`;
+
+    const embed =
+      baseEmbed(color)
+        .setTitle(title)
+        .setDescription(description)
+        .setFooter({
+          text: footer
+        });
+
+    if (image) {
+      embed.setImage(image);
+    }
+
+    const message =
+      await channel.send({
+        embeds: [embed]
+      });
+
+    cfg.embeds[id] = {
+      id,
+      channelId: channel.id,
+      messageId: message.id,
+      title,
+      description,
+      color: normColor(color),
+      image: image || null,
+      footer,
+      createdBy: i.user.id,
+      createdAt: Date.now()
+    };
+
+    saveConfig();
+
+    return sendEmbed(
+      i,
+      "✅ Embed Created",
+      `Your embed was posted in ${channel}.\n\n**Embed ID:** \`${id}\``,
+      SUCCESS,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "delete") {
+    const id =
+      i.options.getString("id");
+
+    const record =
+      cfg.embeds[id];
+
+    if (!record) {
+      return safeReply(i, {
+        content:
+          "❌ Embed not found.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
+
+    const channel =
+      i.guild.channels.cache.get(
+        record.channelId
+      );
+
+    if (channel?.isTextBased()) {
+      const message =
+        await channel.messages
+          .fetch(record.messageId)
+          .catch(() => null);
+
+      if (message) {
+        await message
+          .delete()
+          .catch(() => {});
+      }
+    }
+
+    delete cfg.embeds[id];
+    saveConfig();
+
+    return sendEmbed(
+      i,
+      "🗑️ Embed Deleted",
+      `Embed \`${id}\` has been deleted.`,
+      SUCCESS,
+      { ephemeral: true }
+    );
+  }
+
+  if (sub === "list") {
+    const records =
+      Object.values(
+        cfg.embeds
+      );
+
+    if (!records.length) {
+      return sendEmbed(
+        i,
+        "🧩 Saved Embeds",
+        "No saved embeds.",
+        ACCENT,
+        { ephemeral: true }
+      );
+    }
+
+    const text =
+      records
+        .slice(0, 20)
+        .map(
+          x =>
+            `• \`${x.id}\` — ${clip(
+              x.title,
+              80
+            )}`
+        )
+        .join("\n");
 
     return i.reply({
       embeds: [
         baseEmbed()
           .setTitle(
-            `👤 ${user.tag}`
+            "🧩 Saved Embeds"
+          )
+          .setDescription(text)
+      ],
+      flags: MessageFlags.Ephemeral
+    });
+  }
+}
+
+/* =========================================================
+   UTILITY
+   ========================================================= */
+
+async function handleUtility(i) {
+  const sub =
+    i.options.getSubcommand();
+
+  if (sub === "ping") {
+    return sendEmbed(
+      i,
+      "🏓 Pong!",
+      `Bot latency: **${client.ws.ping}ms**`,
+      SUCCESS
+    );
+  }
+
+  if (sub === "userinfo") {
+    const user =
+      i.options.getUser(
+        "user"
+      );
+
+    const member =
+      await i.guild.members
+        .fetch(user.id)
+        .catch(() => null);
+
+    return i.reply({
+      embeds: [
+        baseEmbed()
+          .setTitle(
+            `👤 ${user.username}`
           )
           .setThumbnail(
             user.displayAvatarURL({
@@ -3472,62 +2676,93 @@ async function handleUtility(i) {
           )
           .addFields(
             {
-              name: "ID",
+              name: "User ID",
               value: user.id,
               inline: true
             },
             {
-              name: "Bot",
-              value: user.bot
-                ? "Yes"
-                : "No",
+              name: "Created",
+              value: `<t:${Math.floor(
+                user.createdTimestamp /
+                  1000
+              )}:R>`,
+              inline: true
+            },
+            {
+              name: "Joined",
+              value:
+                member?.joinedTimestamp
+                  ? `<t:${Math.floor(
+                      member.joinedTimestamp /
+                        1000
+                    )}:R>`
+                  : "Unknown",
               inline: true
             }
           )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   }
 
   if (sub === "serverinfo") {
+    const guild =
+      i.guild;
+
     return i.reply({
       embeds: [
         baseEmbed()
           .setTitle(
-            `🏠 ${i.guild.name}`
+            `🏠 ${guild.name}`
+          )
+          .setThumbnail(
+            guild.iconURL({
+              extension: "png",
+              size: 256
+            })
           )
           .addFields(
             {
               name: "Members",
-              value: `${i.guild.memberCount}`,
+              value: String(
+                guild.memberCount
+              ),
               inline: true
             },
             {
               name: "Channels",
-              value: `${i.guild.channels.cache.size}`,
+              value: String(
+                guild.channels.cache.size
+              ),
               inline: true
             },
             {
               name: "Roles",
-              value: `${i.guild.roles.cache.size}`,
+              value: String(
+                guild.roles.cache.size
+              ),
+              inline: true
+            },
+            {
+              name: "Owner",
+              value: `<@${guild.ownerId}>`,
               inline: true
             }
           )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   }
 
   if (sub === "avatar") {
     const user =
-      i.options.getUser("user") ||
-      i.user;
+      i.options.getUser(
+        "user"
+      ) || i.user;
 
     return i.reply({
       embeds: [
         baseEmbed()
           .setTitle(
-            `🖼️ ${user.tag}'s Avatar`
+            `🖼️ ${user.username}'s Avatar`
           )
           .setImage(
             user.displayAvatarURL({
@@ -3535,8 +2770,7 @@ async function handleUtility(i) {
               size: 1024
             })
           )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   }
 
@@ -3549,12 +2783,12 @@ async function handleUtility(i) {
     return i.reply({
       embeds: [
         baseEmbed(
-          role.hexColor === "#000000"
-            ? ACCENT
-            : role.hexColor
+          validColor(role.hexColor)
+            ? role.hexColor
+            : ACCENT
         )
           .setTitle(
-            `🏷️ ${role.name}`
+            `🎨 ${role.name}`
           )
           .addFields(
             {
@@ -3564,49 +2798,27 @@ async function handleUtility(i) {
             },
             {
               name: "Members",
-              value: `${role.members.size}`,
+              value: String(
+                role.members.size
+              ),
               inline: true
             },
             {
               name: "Position",
-              value: `${role.position}`,
+              value: String(
+                role.position
+              ),
               inline: true
             }
           )
-      ],
-      flags: MessageFlags.Ephemeral
-    });
-  }
-
-  if (sub === "channelinfo") {
-    const ch =
-      i.options.getChannel(
-        "channel"
-      ) || i.channel;
-
-    return i.reply({
-      embeds: [
-        baseEmbed()
-          .setTitle(
-            `📺 ${ch.name}`
-          )
-          .addFields(
-            {
-              name: "ID",
-              value: ch.id,
-              inline: true
-            },
-            {
-              name: "Type",
-              value: `${ch.type}`,
-              inline: true
-            }
-          )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   }
 }
+
+/* =========================================================
+   FUN
+   ========================================================= */
 
 async function handleFun(i) {
   const sub =
@@ -3616,11 +2828,18 @@ async function handleFun(i) {
     const answers = [
       "Yes.",
       "No.",
-      "Probably.",
       "Definitely.",
+      "Probably.",
       "Maybe.",
-      "Ask again later."
+      "Ask again later.",
+      "Absolutely not.",
+      "The signs point to yes."
     ];
+
+    const question =
+      i.options.getString(
+        "question"
+      );
 
     return i.reply({
       embeds: [
@@ -3628,33 +2847,52 @@ async function handleFun(i) {
           .setTitle(
             "🎱 Magic 8-Ball"
           )
-          .setDescription(
-            answers[
-              Math.floor(
-                Math.random() *
-                  answers.length
+          .addFields(
+            {
+              name: "Question",
+              value: clip(
+                question,
+                1024
               )
-            ]
+            },
+            {
+              name: "Answer",
+              value:
+                answers[
+                  Math.floor(
+                    Math.random() *
+                      answers.length
+                  )
+                ]
+            }
           )
       ]
     });
   }
 
   if (sub === "coinflip") {
-    return i.reply(
-      Math.random() < 0.5
-        ? "🪙 Heads!"
-        : "🪙 Tails!"
+    return sendEmbed(
+      i,
+      "🪙 Coin Flip",
+      `The coin landed on **${
+        Math.random() < 0.5
+          ? "Heads"
+          : "Tails"
+      }**.`,
+      ACCENT
     );
   }
 
   if (sub === "dice") {
-    return i.reply(
-      `🎲 You rolled **${
+    return sendEmbed(
+      i,
+      "🎲 Dice Roll",
+      `You rolled **${
         Math.floor(
           Math.random() * 6
         ) + 1
-      }**!`
+      }**.`,
+      ACCENT
     );
   }
 
@@ -3668,408 +2906,543 @@ async function handleFun(i) {
         .map(x => x.trim())
         .filter(Boolean);
 
-    if (!options.length)
-      return i.reply(
-        "❌ No options provided."
-      );
+    if (!options.length) {
+      return safeReply(i, {
+        content:
+          "❌ Give me some options.",
+        flags: MessageFlags.Ephemeral
+      });
+    }
 
-    return i.reply(
-      `🎯 I choose **${
+    return sendEmbed(
+      i,
+      "🎯 JRC Chooses",
+      `I choose **${
         options[
           Math.floor(
             Math.random() *
               options.length
           )
         ]
-      }**!`
+      }**.`,
+      ACCENT
     );
   }
 
-  if (sub === "poll") {
-    const question =
+  if (sub === "rps") {
+    const choices = [
+      "rock",
+      "paper",
+      "scissors"
+    ];
+
+    const userChoice =
       i.options.getString(
-        "question"
+        "choice"
       );
 
-    const msg =
-      await i.reply({
-        content:
-          `📊 **Poll:** ${question}\n\n👍 Yes\n👎 No`,
-        fetchReply: true
-      });
+    const botChoice =
+      choices[
+        Math.floor(
+          Math.random() *
+            choices.length
+        )
+      ];
 
-    await msg.react("👍");
-    await msg.react("👎");
+    let result = "It's a tie!";
+
+    if (
+      (userChoice === "rock" &&
+        botChoice === "scissors") ||
+      (userChoice === "paper" &&
+        botChoice === "rock") ||
+      (userChoice === "scissors" &&
+        botChoice === "paper")
+    ) {
+      result = "You win! 🏆";
+    } else if (
+      userChoice !== botChoice
+    ) {
+      result = "JRC wins! 🤖";
+    }
+
+    return i.reply({
+      embeds: [
+        baseEmbed()
+          .setTitle(
+            "✊ Rock Paper Scissors"
+          )
+          .addFields(
+            {
+              name: "You",
+              value: userChoice,
+              inline: true
+            },
+            {
+              name: "JRC",
+              value: botChoice,
+              inline: true
+            },
+            {
+              name: "Result",
+              value: result
+            }
+          )
+      ]
+    });
+  }
+
+  if (sub === "rate") {
+    const thing =
+      i.options.getString(
+        "thing"
+      );
+
+    const rating =
+      Math.floor(
+        Math.random() * 101
+      );
+
+    return sendEmbed(
+      i,
+      "⭐ JRC Rating",
+      `I rate **${clip(
+        thing,
+        200
+      )}** a **${rating}/100**.`,
+      ACCENT
+    );
+  }
+
+  if (sub === "compliment") {
+    const compliments = [
+      "You're doing great.",
+      "You've got this.",
+      "Your energy is unmatched.",
+      "You're genuinely awesome.",
+      "Keep going — you're making progress."
+    ];
+
+    return sendEmbed(
+      i,
+      "💙 JRC Says",
+      compliments[
+        Math.floor(
+          Math.random() *
+            compliments.length
+        )
+      ],
+      SUCCESS
+    );
   }
 }
 
-async function handleAntiNuke(i) {
-  const cfg =
-    guildConfig(
-      i.guild.id
-    ).antinuke;
+/* =========================================================
+   JRC CORE
+   ========================================================= */
 
+async function handleJRC(i) {
   const sub =
     i.options.getSubcommand();
 
-  if (!hasAdmin(i))
+  const cfg =
+    guildConfig(
+      i.guild.id
+    );
+
+  if (sub === "help") {
+    const embed =
+      baseEmbed()
+        .setTitle(
+          "🤖 JRC Bot"
+        )
+        .setDescription(
+          "Your server's all-in-one management bot."
+        )
+        .addFields(
+          {
+            name: "👋 Community",
+            value:
+              "`/welcome` • `/goodbye`"
+          },
+          {
+            name: "🎭 Roles",
+            value:
+              "`/role` • `/autorole` • `/reactionrole`"
+          },
+          {
+            name: "🛡️ Moderation",
+            value:
+              "`/mod` • `/logs`"
+          },
+          {
+            name: "🔐 Security",
+            value:
+              "`/security` • `/automod`"
+          },
+          {
+            name: "🧩 Embeds",
+            value:
+              "`/embed`"
+          },
+          {
+            name: "⚙️ Utility",
+            value:
+              "`/utility`"
+          },
+          {
+            name: "😂 Fun",
+            value:
+              "`/fun`"
+          }
+        );
+
     return i.reply({
-      content:
-        "❌ Administrator is required.",
+      embeds: [embed],
       flags: MessageFlags.Ephemeral
     });
-
-  if (sub === "setup") {
-    cfg.enabled = true;
-    saveConfig();
-
-    return i.reply(
-      "🛡️ Anti-nuke enabled with current configuration."
-    );
   }
 
-  if (sub === "enable") {
-    cfg.enabled = true;
-    saveConfig();
-
-    return i.reply(
-      "🟢 Anti-nuke enabled."
-    );
-  }
-
-  if (sub === "disable") {
-    cfg.enabled = false;
-    saveConfig();
-
-    return i.reply(
-      "🔴 Anti-nuke disabled."
-    );
-  }
-
-  if (sub === "config") {
-    cfg.threshold =
-      i.options.getInteger(
-        "threshold"
-      );
-
-    saveConfig();
-
-    return i.reply(
-      `✅ Anti-nuke threshold set to ${cfg.threshold}.`
-    );
+  if (sub === "about") {
+    return i.reply({
+      embeds: [
+        baseEmbed()
+          .setTitle(
+            "🤖 JRC Bot"
+          )
+          .setDescription(
+            "A lightweight Discord server management bot built for JRC."
+          )
+          .addFields(
+            {
+              name: "⚡ Version",
+              value: "JRC 3.0",
+              inline: true
+            },
+            {
+              name: "📡 Status",
+              value: "Online",
+              inline: true
+            },
+            {
+              name: "🌐 Servers",
+              value: String(
+                client.guilds.cache.size
+              ),
+              inline: true
+            }
+          )
+      ]
+    });
   }
 
   if (sub === "status") {
     return i.reply({
-      content:
-        `🛡️ Anti-nuke: ${
-          cfg.enabled
-            ? "🟢 Enabled"
-            : "🔴 Disabled"
-        }\nThreshold: ${cfg.threshold}`,
-      flags: MessageFlags.Ephemeral
+      embeds: [
+        baseEmbed(SUCCESS)
+          .setTitle(
+            "📊 JRC Status"
+          )
+          .addFields(
+            {
+              name: "Bot",
+              value: "🟢 Online",
+              inline: true
+            },
+            {
+              name: "Ping",
+              value: `${client.ws.ping}ms`,
+              inline: true
+            },
+            {
+              name: "Welcome",
+              value:
+                cfg.welcome.enabled
+                  ? "🟢"
+                  : "🔴",
+              inline: true
+            },
+            {
+              name: "Goodbye",
+              value:
+                cfg.goodbye.enabled
+                  ? "🟢"
+                  : "🔴",
+              inline: true
+            },
+            {
+              name: "Logs",
+              value:
+                cfg.logs.enabled
+                  ? "🟢"
+                  : "🔴",
+              inline: true
+            },
+            {
+              name: "Security",
+              value:
+                Object.values(
+                  cfg.security
+                ).some(
+                  x => x === true
+                )
+                  ? "🟢 Active"
+                  : "🔴 Off",
+              inline: true
+            }
+          )
+      ]
     });
   }
-}
 
-async function handleRaid(i) {
-  const cfg =
-    guildConfig(
-      i.guild.id
-    ).raid;
-
-  const sub =
-    i.options.getSubcommand();
-
-  if (!hasAdmin(i))
+  if (sub === "settings") {
     return i.reply({
-      content:
-        "❌ Administrator is required.",
-      flags: MessageFlags.Ephemeral
-    });
-
-  if (sub === "setup") {
-    cfg.enabled = true;
-    saveConfig();
-
-    return i.reply(
-      "🚨 Raid protection enabled."
-    );
-  }
-
-  if (sub === "enable") {
-    cfg.enabled = true;
-    saveConfig();
-
-    return i.reply(
-      "🟢 Raid protection enabled."
-    );
-  }
-
-  if (sub === "disable") {
-    cfg.enabled = false;
-    saveConfig();
-
-    return i.reply(
-      "🔴 Raid protection disabled."
-    );
-  }
-
-  if (sub === "config") {
-    cfg.threshold =
-      i.options.getInteger(
-        "threshold"
-      );
-
-    saveConfig();
-
-    return i.reply(
-      `✅ Raid threshold set to ${cfg.threshold}.`
-    );
-  }
-
-  if (sub === "status") {
-    return i.reply({
-      content:
-        `🚨 Raid protection: ${
-          cfg.enabled
-            ? "🟢 Enabled"
-            : "🔴 Disabled"
-        }\nThreshold: ${cfg.threshold}`,
-      flags: MessageFlags.Ephemeral
+      embeds: [
+        baseEmbed()
+          .setTitle(
+            "⚙️ JRC Settings"
+          )
+          .addFields(
+            {
+              name: "👋 Welcome",
+              value:
+                cfg.welcome.enabled
+                  ? `🟢 <#${cfg.welcome.channel || "?"}>`
+                  : "🔴 Disabled"
+            },
+            {
+              name: "🚪 Goodbye",
+              value:
+                cfg.goodbye.enabled
+                  ? `🟢 <#${cfg.goodbye.channel || "?"}>`
+                  : "🔴 Disabled"
+            },
+            {
+              name: "📋 Logs",
+              value:
+                cfg.logs.enabled
+                  ? `🟢 <#${cfg.logs.channel || "?"}>`
+                  : "🔴 Disabled"
+            },
+            {
+              name: "🎭 Autorole",
+              value:
+                cfg.autoRole.enabled
+                  ? "🟢 Enabled"
+                  : "🔴 Disabled"
+            },
+            {
+              name: "🛡️ Automod",
+              value:
+                cfg.automod.enabled
+                  ? "🟢 Enabled"
+                  : "🔴 Disabled"
+            }
+          ],
+        flags: MessageFlags.Ephemeral
+      ]
     });
   }
 }
 
 /* =========================================================
-   INTERACTIONS
+   INTERACTION HANDLER
    ========================================================= */
 
 client.on(
   "interactionCreate",
-  async i => {
+  async interaction => {
     try {
       if (
-        i.isChatInputCommand()
+        interaction.isChatInputCommand()
       ) {
-        if (
-          i.commandName ===
-          "jrc"
-        )
-          return handleJRC(i);
+        switch (
+          interaction.commandName
+        ) {
+          case "jrc":
+            return handleJRC(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "welcome"
-        )
-          return handleGreetingCommand(
-            i,
-            "welcome"
-          );
+          case "welcome":
+            return handleGreetingCommand(
+              interaction,
+              "welcome"
+            );
 
-        if (
-          i.commandName ===
-          "goodbye"
-        )
-          return handleGreetingCommand(
-            i,
-            "goodbye"
-          );
+          case "goodbye":
+            return handleGreetingCommand(
+              interaction,
+              "goodbye"
+            );
 
-        if (
-          i.commandName ===
-          "mod"
-        )
-          return handleMod(i);
+          case "mod":
+            return handleMod(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "automod"
-        )
-          return handleAutoMod(i);
+          case "logs":
+            return handleLogs(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "logs"
-        )
-          return handleLogs(i);
+          case "security":
+            return handleSecurity(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "reactionrole"
-        )
-          return handleReactionRole(i);
+          case "automod":
+            return handleAutoMod(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "utility"
-        )
-          return handleUtility(i);
+          case "role":
+            return handleRole(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "fun"
-        )
-          return handleFun(i);
+          case "autorole":
+            return handleAutoRole(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "antinuke"
-        )
-          return handleAntiNuke(i);
+          case "reactionrole":
+            return handleReactionRole(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "raid"
-        )
-          return handleRaid(i);
+          case "embed":
+            return handleEmbed(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "ticket"
-        )
-          return handleTicket(i);
+          case "utility":
+            return handleUtility(
+              interaction
+            );
 
-        if (
-          i.commandName ===
-          "embed"
-        )
-          return handleEmbed(i);
-
-        if (
-          i.commandName ===
-          "server"
-        )
-          return handleServer(i);
-
-        if (
-          i.commandName ===
-          "event"
-        )
-          return handleEvent(i);
+          case "fun":
+            return handleFun(
+              interaction
+            );
+        }
       }
 
-      if (i.isButton()) {
-        if (
-          i.customId ===
-          "jrc_ticket_create"
-        )
-          return createTicket(i);
+      /* =====================================================
+         BUTTONS
+         ===================================================== */
+
+      if (
+        interaction.isButton()
+      ) {
+        const id =
+          interaction.customId;
 
         if (
-          i.customId ===
-          "jrc_ticket_close"
-        )
-          return closeTicketButton(i);
-
-        if (
-          i.customId.startsWith(
-            "jrc_event_rsvp_"
-          )
-        )
-          return handleEventRSVP(i);
+          !id.startsWith("jrc_")
+        ) {
+          return;
+        }
 
         const parts =
-          i.customId.split("_");
-
-        if (
-          parts[0] !==
-          "jrc"
-        )
-          return;
-
-        const type =
-          parts[2];
+          id.split("_");
 
         const action =
           parts[1];
 
+        const type =
+          parts[2];
+
+        if (
+          !["welcome", "goodbye"]
+            .includes(type)
+        ) {
+          return;
+        }
+
+        if (!hasManageGuild(interaction)) {
+          return safeReply(
+            interaction,
+            {
+              content:
+                "❌ You need **Manage Server**.",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
+
         const cfg =
           guildConfig(
-            i.guild.id
+            interaction.guild.id
           )[type];
 
-        if (!cfg)
-          return;
-
-        if (
-          action ===
-          "enable"
-        ) {
-          cfg.enabled =
-            true;
-
+        if (action === "enable") {
+          cfg.enabled = true;
           saveConfig();
 
-          return i.update(
+          return interaction.update(
             greetingPanel(
               type,
-              i.guild
+              interaction.guild
             )
           );
         }
 
-        if (
-          action ===
-          "disable"
-        ) {
-          cfg.enabled =
-            false;
-
+        if (action === "disable") {
+          cfg.enabled = false;
           saveConfig();
 
-          return i.update(
+          return interaction.update(
             greetingPanel(
               type,
-              i.guild
+              interaction.guild
             )
           );
         }
 
-        if (
-          action ===
-          "preview"
-        ) {
-          return i.reply({
+        if (action === "preview") {
+          return interaction.reply({
             embeds: [
               buildGreetingEmbed(
                 type,
-                i.member,
+                interaction.member,
                 cfg
               )
             ],
-            flags: MessageFlags.Ephemeral
+            flags:
+              MessageFlags.Ephemeral
           });
         }
 
         if (
-          action ===
-          "channel"
+          action === "channel"
         ) {
-          return i.reply({
-            content:
-              `Select the ${type} channel below.`,
+          const menu =
+            new ChannelSelectMenuBuilder()
+              .setCustomId(
+                `jrc_select_channel_${type}`
+              )
+              .setPlaceholder(
+                `Select ${type} channel`
+              )
+              .setChannelTypes(
+                ChannelType.GuildText
+              );
+
+          return interaction.reply({
             components: [
               new ActionRowBuilder().addComponents(
-                new ChannelSelectMenuBuilder()
-                  .setCustomId(
-                    `jrc_select_channel_${type}`
-                  )
-                  .setPlaceholder(
-                    `Select ${type} channel`
-                  )
-                  .addChannelTypes(
-                    ChannelType.GuildText
-                  )
-              ]
+                menu
+              )
             ],
-            flags: MessageFlags.Ephemeral
+            flags:
+              MessageFlags.Ephemeral
           });
         }
 
         if (
-          action ===
-          "config"
+          action === "config"
         ) {
           const modal =
             new ModalBuilder()
@@ -4077,13 +3450,15 @@ client.on(
                 `jrc_modal_${type}`
               )
               .setTitle(
-                `Configure ${type}`
+                type === "welcome"
+                  ? "Welcome Configuration"
+                  : "Goodbye Configuration"
               );
 
           const fields = [
             [
               "title",
-              "Title",
+              "Embed Title",
               cfg.title,
               TextInputStyle.Short,
               true,
@@ -4103,11 +3478,11 @@ client.on(
               cfg.message,
               TextInputStyle.Paragraph,
               true,
-              4000
+              1000
             ],
             [
               "color",
-              "Color",
+              "Embed Color",
               cfg.color,
               TextInputStyle.Short,
               false,
@@ -4115,7 +3490,7 @@ client.on(
             ],
             [
               "image",
-              "Image URL",
+              "Image / GIF URL",
               cfg.image || "",
               TextInputStyle.Short,
               false,
@@ -4125,7 +3500,7 @@ client.on(
 
           for (
             const [
-              id,
+              fieldId,
               label,
               value,
               style,
@@ -4133,167 +3508,178 @@ client.on(
               max
             ] of fields
           ) {
+            const input =
+              new TextInputBuilder()
+                .setCustomId(
+                  fieldId
+                )
+                .setLabel(label)
+                .setStyle(style)
+                .setRequired(required)
+                .setMaxLength(max)
+                .setValue(
+                  String(
+                    value || ""
+                  ).slice(0, max)
+                );
+
             modal.addComponents(
               new ActionRowBuilder().addComponents(
-                new TextInputBuilder()
-                  .setCustomId(id)
-                  .setLabel(label)
-                  .setStyle(style)
-                  .setRequired(
-                    required
-                  )
-                  .setMaxLength(
-                    max
-                  )
-                  .setValue(
-                    String(
-                      value || ""
-                    ).slice(
-                      0,
-                      max
-                    )
-                  )
+                input
               )
             );
           }
 
-          return i.showModal(
+          return interaction.showModal(
             modal
           );
         }
       }
 
+      /* =====================================================
+         CHANNEL SELECT
+         ===================================================== */
+
       if (
-        i.isChannelSelectMenu()
+        interaction.isChannelSelectMenu()
       ) {
         if (
-          !i.customId.startsWith(
+          !interaction.customId.startsWith(
             "jrc_select_channel_"
           )
-        )
+        ) {
           return;
+        }
 
         const type =
-          i.customId.replace(
+          interaction.customId.replace(
             "jrc_select_channel_",
             ""
           );
 
-        const ch =
-          i.channels.first();
+        if (
+          !["welcome", "goodbye"]
+            .includes(type)
+        ) {
+          return;
+        }
+
+        const channel =
+          interaction.channels.first();
 
         const cfg =
           guildConfig(
-            i.guild.id
+            interaction.guild.id
           )[type];
 
-        if (!cfg)
-          return;
-
         cfg.channel =
-          ch.id;
+          channel.id;
 
         saveConfig();
 
-        return i.update({
+        return interaction.update({
           content:
-            `📢 ${type} channel set to ${ch}.`,
+            `📢 ${type} channel set to ${channel}.`,
           components: []
         });
       }
 
+      /* =====================================================
+         MODALS
+         ===================================================== */
+
       if (
-        i.isModalSubmit()
+        interaction.isModalSubmit()
       ) {
         if (
-          i.customId ===
-          "jrc_embed_create"
-        )
-          return submitEmbed(
-            i,
-            false
-          );
-
-        if (
-          i.customId.startsWith(
-            "jrc_embed_edit_"
-          )
-        )
-          return submitEmbed(
-            i,
-            true
-          );
-
-        if (
-          i.customId.startsWith(
-            "jrc_event_edit_"
-          )
-        )
-          return submitEventEdit(
-            i
-          );
-
-        if (
-          !i.customId.startsWith(
+          !interaction.customId.startsWith(
             "jrc_modal_"
           )
-        )
+        ) {
           return;
+        }
+
+        if (!hasManageGuild(interaction)) {
+          return safeReply(
+            interaction,
+            {
+              content:
+                "❌ You need **Manage Server**.",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
 
         const type =
-          i.customId.replace(
+          interaction.customId.replace(
             "jrc_modal_",
             ""
           );
 
+        if (
+          !["welcome", "goodbye"]
+            .includes(type)
+        ) {
+          return;
+        }
+
         const cfg =
           guildConfig(
-            i.guild.id
+            interaction.guild.id
           )[type];
 
         const title =
-          i.fields.getTextInputValue(
+          interaction.fields.getTextInputValue(
             "title"
           );
 
         const description =
-          i.fields.getTextInputValue(
+          interaction.fields.getTextInputValue(
             "description"
           );
 
         const message =
-          i.fields.getTextInputValue(
+          interaction.fields.getTextInputValue(
             "message"
           );
 
         const color =
-          i.fields.getTextInputValue(
+          interaction.fields.getTextInputValue(
             "color"
           ) || ACCENT;
 
         const image =
-          i.fields.getTextInputValue(
+          interaction.fields.getTextInputValue(
             "image"
           ) || null;
 
-        if (!validColor(color))
-          return i.reply({
-            content:
-              "❌ Invalid color. Use a hex color such as `#5865F2`.",
-            flags:
-              MessageFlags.Ephemeral
-          });
+        if (!validColor(color)) {
+          return safeReply(
+            interaction,
+            {
+              content:
+                "❌ Invalid color. Example: `#5865F2`",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
 
         if (
           image &&
           !validImage(image)
-        )
-          return i.reply({
-            content:
-              "❌ Invalid image/GIF URL.",
-            flags:
-              MessageFlags.Ephemeral
-          });
+        ) {
+          return safeReply(
+            interaction,
+            {
+              content:
+                "❌ Invalid image/GIF URL.",
+              flags:
+                MessageFlags.Ephemeral
+            }
+          );
+        }
 
         Object.assign(
           cfg,
@@ -4301,17 +3687,16 @@ client.on(
             title,
             description,
             message,
-            color:
-              normColor(
-                color
-              ),
+            color: normColor(
+              color
+            ),
             image
           }
         );
 
         saveConfig();
 
-        return i.reply({
+        return interaction.reply({
           embeds: [
             baseEmbed(
               cfg.color
@@ -4327,17 +3712,17 @@ client.on(
             MessageFlags.Ephemeral
         });
       }
-    } catch (e) {
+    } catch (error) {
       console.error(
         "Interaction error:",
-        e
+        error
       );
 
-      await safeReply(
-        i,
+      return safeReply(
+        interaction,
         {
           content:
-            "❌ Something went wrong while processing that.",
+            "❌ JRC couldn't complete that action. Check the bot's permissions and try again.",
           flags:
             MessageFlags.Ephemeral
         }
@@ -4347,7 +3732,7 @@ client.on(
 );
 
 /* =========================================================
-   WELCOME / GOODBYE / RAID
+   WELCOME
    ========================================================= */
 
 client.on(
@@ -4359,11 +3744,38 @@ client.on(
           member.guild.id
         );
 
+      /* Autorole */
+      if (
+        cfg.autoRole.enabled &&
+        cfg.autoRole.role
+      ) {
+        const role =
+          member.guild.roles.cache.get(
+            cfg.autoRole.role
+          );
+
+        if (
+          role &&
+          !role.managed &&
+          member.guild.members.me &&
+          role.position <
+            member.guild.members.me.roles
+              .highest.position
+        ) {
+          await member.roles
+            .add(
+              role,
+              "JRC autorole"
+            )
+            .catch(() => {});
+        }
+      }
+
       await logAction(
         member.guild,
         "📥 MEMBER JOINED",
         `${member} joined the server.`,
-        "#57F287",
+        SUCCESS,
         [
           {
             name: "👤 User",
@@ -4372,110 +3784,84 @@ client.on(
         ]
       );
 
-      if (cfg.raid.enabled) {
+      if (
+        cfg.security.antiRaid
+      ) {
         const now =
           Date.now();
 
-        cfg.raid._joins =
+        cfg._joins =
           (
-            cfg.raid._joins ||
-            []
+            cfg._joins || []
           ).filter(
             t =>
               now - t <
-              cfg.raid.interval
+              cfg.security
+                .raidInterval
           );
 
-        cfg.raid._joins.push(
+        cfg._joins.push(
           now
         );
 
         if (
-          cfg.raid._joins
-            .length >=
-          cfg.raid.threshold
+          cfg._joins.length >=
+          cfg.security
+            .raidThreshold
         ) {
-          cfg.raid.activeUntil =
-            now + 60000;
-
           await logAction(
             member.guild,
-            "🚨 RAID DETECTED",
-            `Raid protection triggered after **${cfg.raid._joins.length} joins**.`,
-            "#ED4245"
+            "🚨 RAID ALERT",
+            `JRC detected **${cfg._joins.length} joins** in a short period.`,
+            DANGER
           );
-
-          if (
-            cfg.raid.action ===
-            "kick"
-          ) {
-            for (
-              const [
-                ,
-                m
-              ] of member.guild
-                .members.cache
-            ) {
-              if (
-                !m.user.bot &&
-                m.id !==
-                  member.guild
-                    .ownerId &&
-                m.kickable &&
-                m.joinedTimestamp &&
-                Date.now() -
-                  m.joinedTimestamp <
-                  30000
-              ) {
-                await m
-                  .kick(
-                    "Raid protection"
-                  )
-                  .catch(
-                    () => {}
-                  );
-              }
-            }
-          }
-
-          saveConfig();
         }
+
+        saveConfig();
       }
 
-      const s =
+      const settings =
         cfg.welcome;
 
       if (
-        !s.enabled ||
-        !s.channel
-      )
+        !settings.enabled ||
+        !settings.channel
+      ) {
         return;
+      }
 
-      const ch =
+      const channel =
         member.guild.channels.cache.get(
-          s.channel
+          settings.channel
         );
 
-      if (!ch?.isTextBased())
+      if (
+        !channel?.isTextBased()
+      ) {
         return;
+      }
 
-      await ch.send({
+      await channel.send({
         embeds: [
           buildGreetingEmbed(
             "welcome",
             member,
-            s
+            settings
           )
         ]
       });
-    } catch (e) {
+    } catch (error) {
       console.error(
         "Welcome error:",
-        e
+        error
       );
     }
   }
 );
+
+/* =========================================================
+   GOODBYE
+   ========================================================= */
 
 client.on(
   "guildMemberRemove",
@@ -4493,7 +3879,7 @@ client.on(
           member.user?.tag ||
           member.id
         } left the server.`,
-        "#ED4245",
+        DANGER,
         [
           {
             name: "👤 User",
@@ -4504,41 +3890,47 @@ client.on(
         ]
       );
 
-      const s =
+      const settings =
         cfg.goodbye;
 
       if (
-        !s.enabled ||
-        !s.channel
-      )
+        !settings.enabled ||
+        !settings.channel
+      ) {
         return;
+      }
 
-      const ch =
+      const channel =
         member.guild.channels.cache.get(
-          s.channel
+          settings.channel
         );
 
-      if (ch?.isTextBased())
-        await ch.send({
-          embeds: [
-            buildGreetingEmbed(
-              "goodbye",
-              member,
-              s
-            )
-          ]
-        });
-    } catch (e) {
+      if (
+        !channel?.isTextBased()
+      ) {
+        return;
+      }
+
+      await channel.send({
+        embeds: [
+          buildGreetingEmbed(
+            "goodbye",
+            member,
+            settings
+          )
+        ]
+      });
+    } catch (error) {
       console.error(
         "Goodbye error:",
-        e
+        error
       );
     }
   }
 );
 
 /* =========================================================
-   AUTOMOD
+   MESSAGE SECURITY / AUTOMOD
    ========================================================= */
 
 const spamTracker =
@@ -4551,65 +3943,53 @@ client.on(
       if (
         !message.guild ||
         message.author.bot
-      )
+      ) {
         return;
+      }
 
       const cfg =
         guildConfig(
           message.guild.id
-        ).automod;
-
-      if (!cfg.enabled)
-        return;
+        );
 
       const content =
         message.content.toLowerCase();
 
+      /* Anti mention */
       if (
-        cfg.words.some(
-          w =>
-            content.includes(
-              w.toLowerCase()
-            )
+        cfg.security.antiMention &&
+        (
+          message.mentions.everyone ||
+          message.mentions.users.size >=
+            cfg.security
+              .mentionLimit
+        ) &&
+        !message.member?.permissions.has(
+          PermissionFlagsBits.MentionEveryone
         )
       ) {
-        await message
-          .delete()
-          .catch(
-            () => {}
-          );
-
-        const w =
-          await message.channel
-            .send({
-              content:
-                `🛡️ ${message.author}, that message was removed by automod.`
-            })
-            .catch(
-              () => null
-            );
-
-        if (w)
-          setTimeout(
-            () =>
-              w.delete().catch(
-                () => {}
-              ),
-            5000
-          );
+        await message.delete()
+          .catch(() => {});
 
         await logAction(
           message.guild,
-          "🛡️ AUTOMOD • BLOCKED WORD",
-          `${message.author} triggered blocked-word protection in ${message.channel}.`,
-          "#FEE75C"
+          "📢 MENTION PROTECTION",
+          `${message.author} triggered mention protection in ${message.channel}.`,
+          WARNING
         );
 
         return;
       }
 
+      /* Anti link */
       if (
-        cfg.links &&
+        (
+          cfg.security.antiLink ||
+          (
+            cfg.automod.enabled &&
+            cfg.automod.links
+          )
+        ) &&
         /(https?:\/\/|www\.)/i.test(
           message.content
         ) &&
@@ -4617,47 +3997,88 @@ client.on(
           PermissionFlagsBits.ManageMessages
         )
       ) {
-        await message
-          .delete()
-          .catch(
-            () => {}
-          );
+        await message.delete()
+          .catch(() => {});
 
-        const w =
-          await message.channel
-            .send({
-              content:
-                `🔗 ${message.author}, links aren't allowed here.`
-            })
-            .catch(
-              () => null
-            );
+        const warning =
+          await message.channel.send({
+            embeds: [
+              baseEmbed(WARNING)
+                .setTitle(
+                  "🔗 Link Blocked"
+                )
+                .setDescription(
+                  `${message.author}, links aren't allowed here.`
+                )
+            ]
+          })
+            .catch(() => null);
 
-        if (w)
+        if (warning) {
           setTimeout(
             () =>
-              w.delete().catch(
-                () => {}
-              ),
+              warning
+                .delete()
+                .catch(() => {}),
             5000
           );
+        }
 
         await logAction(
           message.guild,
-          "🔗 AUTOMOD • LINK BLOCKED",
+          "🔗 LINK BLOCKED",
           `${message.author} posted a blocked link in ${message.channel}.`,
-          "#FEE75C"
+          WARNING
         );
 
         return;
       }
 
-      if (cfg.spam.enabled) {
+      /* Blocked words */
+      if (
+        cfg.automod.enabled &&
+        cfg.automod.words.some(
+          word =>
+            content.includes(
+              word.toLowerCase()
+            )
+        )
+      ) {
+        await message.delete()
+          .catch(() => {});
+
+        await logAction(
+          message.guild,
+          "🚫 BLOCKED WORD",
+          `${message.author} triggered blocked-word protection in ${message.channel}.`,
+          WARNING
+        );
+
+        return;
+      }
+
+      /* Anti-spam */
+      const antiSpam =
+        cfg.security.antiSpam ||
+        (
+          cfg.automod.enabled &&
+          cfg.automod.spam.enabled
+        );
+
+      if (antiSpam) {
         const key =
           `${message.guild.id}:${message.author.id}`;
 
         const now =
           Date.now();
+
+        const interval =
+          cfg.automod.spam.interval ||
+          5000;
+
+        const limit =
+          cfg.automod.spam.limit ||
+          6;
 
         const recent =
           (
@@ -4665,9 +4086,9 @@ client.on(
               key
             ) || []
           ).filter(
-            t =>
-              now - t <
-              cfg.spam.interval
+            timestamp =>
+              now - timestamp <
+              interval
           );
 
         recent.push(now);
@@ -4679,7 +4100,7 @@ client.on(
 
         if (
           recent.length >=
-          cfg.spam.limit
+          limit
         ) {
           spamTracker.set(
             key,
@@ -4687,31 +4108,28 @@ client.on(
           );
 
           if (
-            message.member
-              ?.moderatable
+            message.member?.moderatable
           ) {
             await message.member
               .timeout(
                 10000,
-                "Automod spam protection"
+                "JRC anti-spam protection"
               )
-              .catch(
-                () => {}
-              );
+              .catch(() => {});
           }
 
           await logAction(
             message.guild,
             "🛡️ SPAM PROTECTION",
-            `${message.author} triggered spam protection.`,
-            "#FEE75C"
+            `${message.author} triggered anti-spam protection.`,
+            WARNING
           );
         }
       }
-    } catch (e) {
+    } catch (error) {
       console.error(
-        "Automod error:",
-        e
+        "Security error:",
+        error
       );
     }
   }
@@ -4721,7 +4139,7 @@ client.on(
    REACTION ROLES
    ========================================================= */
 
-async function reactionRoleEvent(
+async function handleReactionRoleEvent(
   reaction,
   user,
   add
@@ -4729,12 +4147,11 @@ async function reactionRoleEvent(
   try {
     if (user.bot) return;
 
-    if (reaction.partial)
+    if (reaction.partial) {
       await reaction
         .fetch()
-        .catch(
-          () => {}
-        );
+        .catch(() => {});
+    }
 
     const guild =
       reaction.message.guild;
@@ -4746,7 +4163,7 @@ async function reactionRoleEvent(
         guild.id
       );
 
-    const emojiName =
+    const emoji =
       reaction.emoji.id
         ? `<:${reaction.emoji.name}:${reaction.emoji.id}>`
         : reaction.emoji.name;
@@ -4759,8 +4176,7 @@ async function reactionRoleEvent(
           (
             x.emoji ===
               reaction.emoji.name ||
-            x.emoji ===
-              emojiName
+            x.emoji === emoji
           )
       );
 
@@ -4769,49 +4185,71 @@ async function reactionRoleEvent(
     const member =
       await guild.members
         .fetch(user.id)
-        .catch(
-          () => null
-        );
+        .catch(() => null);
 
     if (!member) return;
 
-    if (add)
+    const role =
+      guild.roles.cache.get(
+        match.role
+      );
+
+    if (
+      !role ||
+      role.managed ||
+      !guild.members.me ||
+      role.position >=
+        guild.members.me.roles
+          .highest.position
+    ) {
+      return;
+    }
+
+    if (add) {
       await member.roles
-        .add(match.role)
-        .catch(
-          () => {}
-        );
-    else
+        .add(
+          role,
+          "JRC self-role"
+        )
+        .catch(() => {});
+    } else {
       await member.roles
-        .remove(match.role)
-        .catch(
-          () => {}
-        );
-  } catch {}
+        .remove(
+          role,
+          "JRC self-role"
+        )
+        .catch(() => {});
+    }
+  } catch (error) {
+    console.error(
+      "Reaction role error:",
+      error
+    );
+  }
 }
 
 client.on(
   "messageReactionAdd",
-  (r, u) =>
-    reactionRoleEvent(
-      r,
-      u,
+  (reaction, user) =>
+    handleReactionRoleEvent(
+      reaction,
+      user,
       true
     )
 );
 
 client.on(
   "messageReactionRemove",
-  (r, u) =>
-    reactionRoleEvent(
-      r,
-      u,
+  (reaction, user) =>
+    handleReactionRoleEvent(
+      reaction,
+      user,
       false
     )
 );
 
 /* =========================================================
-   EXPANDED LOGS
+   MOD LOG EVENTS
    ========================================================= */
 
 client.on(
@@ -4821,14 +4259,15 @@ client.on(
       if (
         !message.guild ||
         message.author?.bot
-      )
+      ) {
         return;
+      }
 
       await logAction(
         message.guild,
         "🗑️ MESSAGE DELETED",
-        `${message.author || "Unknown user"} deleted message in ${message.channel}.`,
-        "#ED4245",
+        `${message.author || "Unknown user"} deleted a message in ${message.channel}.`,
+        DANGER,
         [
           {
             name: "💬 Content",
@@ -4854,20 +4293,22 @@ client.on(
       if (
         !newMessage.guild ||
         newMessage.author?.bot
-      )
+      ) {
         return;
+      }
 
       if (
         oldMessage.content ===
         newMessage.content
-      )
+      ) {
         return;
+      }
 
       await logAction(
         newMessage.guild,
         "✏️ MESSAGE EDITED",
         `${newMessage.author} edited a message in ${newMessage.channel}.`,
-        "#FEE75C",
+        WARNING,
         [
           {
             name: "Before",
@@ -4909,176 +4350,76 @@ client.on(
         );
 
       const added =
-        [
-          ...newRoles
-        ].filter(
-          x =>
-            !oldRoles.has(x) &&
-            x !==
-              newMember.guild
-                .id
+        [...newRoles].filter(
+          role =>
+            !oldRoles.has(role) &&
+            role !== newMember.guild.id
         );
 
       const removed =
-        [
-          ...oldRoles
-        ].filter(
-          x =>
-            !newRoles.has(x) &&
-            x !==
-              newMember.guild
-                .id
+        [...oldRoles].filter(
+          role =>
+            !newRoles.has(role) &&
+            role !== newMember.guild.id
         );
 
-      if (added.length)
+      if (added.length) {
         await logAction(
           newMember.guild,
           "➕ ROLE ADDED",
-          `${newMember} received role(s): ${added
+          `${newMember} received ${added
             .map(
-              x =>
-                `<@&${x}>`
+              id => `<@&${id}>`
             )
             .join(", ")}.`,
-          "#57F287"
+          SUCCESS
         );
+      }
 
-      if (removed.length)
+      if (removed.length) {
         await logAction(
           newMember.guild,
           "➖ ROLE REMOVED",
-          `${newMember} lost role(s): ${removed
+          `${newMember} lost ${removed
             .map(
-              x =>
-                `<@&${x}>`
+              id => `<@&${id}>`
             )
             .join(", ")}.`,
-          "#ED4245"
+          DANGER
         );
+      }
+
+      if (
+        oldMember.nickname !==
+        newMember.nickname
+      ) {
+        await logAction(
+          newMember.guild,
+          "✏️ NICKNAME UPDATED",
+          `${newMember} changed nickname.`,
+          WARNING,
+          [
+            {
+              name: "Before",
+              value:
+                oldMember.nickname ||
+                oldMember.user.username
+            },
+            {
+              name: "After",
+              value:
+                newMember.nickname ||
+                newMember.user.username
+            }
+          ]
+        );
+      }
     } catch {}
   }
 );
 
 /* =========================================================
-   ANTI-NUKE
-   ========================================================= */
-
-const nukeTracker =
-  new Map();
-
-client.on(
-  "guildAuditLogEntryCreate",
-  async (
-    entry,
-    guild
-  ) => {
-    try {
-      const cfg =
-        guildConfig(
-          guild.id
-        ).antinuke;
-
-      if (!cfg.enabled)
-        return;
-
-      const destructive = [
-        AuditLogEvent.ChannelDelete,
-        AuditLogEvent.RoleDelete,
-        AuditLogEvent.GuildBanAdd
-      ];
-
-      if (
-        !destructive.includes(
-          entry.action
-        )
-      )
-        return;
-
-      const executor =
-        entry.executor;
-
-      if (
-        !executor ||
-        executor.id ===
-          guild.ownerId ||
-        executor.id ===
-          client.user.id
-      )
-        return;
-
-      const key =
-        `${guild.id}:${executor.id}`;
-
-      const now =
-        Date.now();
-
-      const recent =
-        (
-          nukeTracker.get(
-            key
-          ) || []
-        ).filter(
-          t =>
-            now - t <
-            cfg.interval
-        );
-
-      recent.push(now);
-
-      nukeTracker.set(
-        key,
-        recent
-      );
-
-      if (
-        recent.length >=
-        cfg.threshold
-      ) {
-        const member =
-          await guild.members
-            .fetch(
-              executor.id
-            )
-            .catch(
-              () => null
-            );
-
-        if (
-          member?.moderatable
-        ) {
-          await member
-            .timeout(
-              3600000,
-              "Anti-nuke protection"
-            )
-            .catch(
-              () => {}
-            );
-        }
-
-        await logAction(
-          guild,
-          "🚨 ANTI-NUKE TRIGGERED",
-          `${executor} triggered anti-nuke protection.`,
-          "#ED4245"
-        );
-
-        nukeTracker.set(
-          key,
-          []
-        );
-      }
-    } catch (e) {
-      console.error(
-        "Anti-nuke error:",
-        e
-      );
-    }
-  }
-);
-
-/* =========================================================
-   READY / REGISTRATION / ERRORS
+   READY
    ========================================================= */
 
 client.once(
@@ -5116,7 +4457,7 @@ client.once(
 
     if (!token || !clientId) {
       console.error(
-        "❌ Missing DISCORD_TOKEN or CLIENT_ID environment variable."
+        "❌ Missing DISCORD_TOKEN or CLIENT_ID."
       );
       return;
     }
@@ -5143,51 +4484,60 @@ client.once(
       );
 
       console.log(
-        `✅ Registered ${commands.length} slash command groups.`
+        `✅ Registered ${commands.length} command groups.`
       );
-    } catch (e) {
+    } catch (error) {
       console.error(
         "❌ Command registration failed:",
-        e
+        error
       );
     }
   }
 );
 
+/* =========================================================
+   ERROR PROTECTION
+   ========================================================= */
+
 process.on(
   "unhandledRejection",
-  e =>
+  error => {
     console.error(
       "Unhandled rejection:",
-      e
-    )
+      error
+    );
+  }
 );
 
 process.on(
   "uncaughtException",
-  e =>
+  error => {
     console.error(
       "Uncaught exception:",
-      e
-    )
+      error
+    );
+  }
 );
+
+/* =========================================================
+   LOGIN
+   ========================================================= */
 
 if (
   !process.env.DISCORD_TOKEN
 ) {
   console.error(
-    "❌ DISCORD_TOKEN is missing. Add it to your hosting environment variables."
+    "❌ DISCORD_TOKEN is missing."
   );
 } else {
   client
     .login(
       process.env.DISCORD_TOKEN
     )
-    .catch(
-      e =>
-        console.error(
-          "❌ Login failed:",
-          e
-        )
-    );
+    .catch(error => {
+      console.error(
+        "❌ Login failed:",
+        error
+      );
+    });
 }
