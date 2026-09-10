@@ -842,7 +842,7 @@ commands.push(
     )
 );
 
-commands.push(
+commands.push
   new SlashCommandBuilder()
     .setName("fun")
     .setDescription("Fun commands")
