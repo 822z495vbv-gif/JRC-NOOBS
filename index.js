@@ -113,10 +113,6 @@ function guildConfig(guildId) {
     saveConfig();
   }
 
-  // ==========================================================
-  // MIGRATION FOR OLD CONFIG FILES
-  // ==========================================================
-
   const cfg = config[guildId];
 
   if (!cfg.welcome)
@@ -125,7 +121,9 @@ function guildConfig(guildId) {
   if (!cfg.goodbye)
     cfg.goodbye = {};
 
-  // Welcome defaults
+  // ==========================================================
+  // WELCOME DEFAULTS
+  // ==========================================================
 
   if (cfg.welcome.enabled === undefined)
     cfg.welcome.enabled = false;
@@ -162,7 +160,9 @@ function guildConfig(guildId) {
   if (cfg.welcome.thumbnail === undefined)
     cfg.welcome.thumbnail = true;
 
-  // Goodbye defaults
+  // ==========================================================
+  // GOODBYE DEFAULTS
+  // ==========================================================
 
   if (cfg.goodbye.enabled === undefined)
     cfg.goodbye.enabled = false;
@@ -239,7 +239,7 @@ function replaceVariables(text, member) {
 }
 
 // ============================================================
-// URL VALIDATION
+// VALIDATION
 // ============================================================
 
 function validImage(url) {
@@ -261,10 +261,6 @@ function validImage(url) {
   }
 }
 
-// ============================================================
-// COLOR VALIDATION
-// ============================================================
-
 function validColor(color) {
 
   if (!color) return false;
@@ -279,163 +275,185 @@ function validColor(color) {
 const commands = [
 
   // ==========================================================
-  // WELCOME
+  // /WELCOME
   // ==========================================================
 
   new SlashCommandBuilder()
     .setName("welcome")
     .setDescription(
-      "Configure JRC's premium welcome system"
+      "Open the JRC premium welcome configuration panel"
     )
     .setDefaultMemberPermissions(
       PermissionFlagsBits.ManageGuild
-    )
-
-    .addSubcommand(sub =>
-      sub
-        .setName("setup")
-        .setDescription(
-          "Quickly configure the welcome system"
-        )
-
-        .addChannelOption(opt =>
-          opt
-            .setName("channel")
-            .setDescription(
-              "Channel where welcome messages are sent"
-            )
-            .addChannelTypes(
-              ChannelType.GuildText,
-              ChannelType.GuildAnnouncement
-            )
-            .setRequired(true)
-        )
-
-        .addStringOption(opt =>
-          opt
-            .setName("message")
-            .setDescription(
-              "Welcome message"
-            )
-            .setRequired(false)
-        )
-
-        .addStringOption(opt =>
-          opt
-            .setName("gif")
-            .setDescription(
-              "Image/GIF URL"
-            )
-            .setRequired(false)
-        )
-
-        .addStringOption(opt =>
-          opt
-            .setName("color")
-            .setDescription(
-              "Embed color, e.g. #5865F2"
-            )
-            .setRequired(false)
-        )
-    )
-
-    .addSubcommand(sub =>
-      sub
-        .setName("disable")
-        .setDescription(
-          "Disable welcome messages"
-        )
-    )
-
-    .addSubcommand(sub =>
-      sub
-        .setName("test")
-        .setDescription(
-          "Preview the current welcome message"
-        )
     ),
 
   // ==========================================================
-  // GOODBYE
+  // /GOODBYE
   // ==========================================================
 
   new SlashCommandBuilder()
     .setName("goodbye")
     .setDescription(
-      "Configure JRC's premium goodbye system"
+      "Open the JRC premium goodbye configuration panel"
+    )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.ManageGuild
+    ),
+
+  // ==========================================================
+  // /WELCOME-SETUP
+  // ==========================================================
+
+  new SlashCommandBuilder()
+    .setName("welcome-setup")
+    .setDescription(
+      "Quickly configure the welcome system"
+    )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.ManageGuild
+    )
+    .addChannelOption(opt =>
+      opt
+        .setName("channel")
+        .setDescription(
+          "Channel where welcome messages are sent"
+        )
+        .addChannelTypes(
+          ChannelType.GuildText,
+          ChannelType.GuildAnnouncement
+        )
+        .setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName("message")
+        .setDescription(
+          "Welcome message"
+        )
+        .setRequired(false)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName("gif")
+        .setDescription(
+          "Image/GIF URL"
+        )
+        .setRequired(false)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName("color")
+        .setDescription(
+          "Embed color, e.g. #5865F2"
+        )
+        .setRequired(false)
+    ),
+
+  // ==========================================================
+  // /GOODBYE-SETUP
+  // ==========================================================
+
+  new SlashCommandBuilder()
+    .setName("goodbye-setup")
+    .setDescription(
+      "Quickly configure the goodbye system"
+    )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.ManageGuild
+    )
+    .addChannelOption(opt =>
+      opt
+        .setName("channel")
+        .setDescription(
+          "Channel where goodbye messages are sent"
+        )
+        .addChannelTypes(
+          ChannelType.GuildText,
+          ChannelType.GuildAnnouncement
+        )
+        .setRequired(true)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName("message")
+        .setDescription(
+          "Goodbye message"
+        )
+        .setRequired(false)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName("gif")
+        .setDescription(
+          "Image/GIF URL"
+        )
+        .setRequired(false)
+    )
+    .addStringOption(opt =>
+      opt
+        .setName("color")
+        .setDescription(
+          "Embed color, e.g. #ED4245"
+        )
+        .setRequired(false)
+    ),
+
+  // ==========================================================
+  // /WELCOME-DISABLE
+  // ==========================================================
+
+  new SlashCommandBuilder()
+    .setName("welcome-disable")
+    .setDescription(
+      "Disable the JRC welcome system"
+    )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.ManageGuild
+    ),
+
+  // ==========================================================
+  // /GOODBYE-DISABLE
+  // ==========================================================
+
+  new SlashCommandBuilder()
+    .setName("goodbye-disable")
+    .setDescription(
+      "Disable the JRC goodbye system"
+    )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.ManageGuild
+    ),
+
+  // ==========================================================
+  // /WELCOME-TEST
+  // ==========================================================
+
+  new SlashCommandBuilder()
+    .setName("welcome-test")
+    .setDescription(
+      "Preview the current welcome embed"
+    )
+    .setDefaultMemberPermissions(
+      PermissionFlagsBits.ManageGuild
+    ),
+
+  // ==========================================================
+  // /GOODBYE-TEST
+  // ==========================================================
+
+  new SlashCommandBuilder()
+    .setName("goodbye-test")
+    .setDescription(
+      "Preview the current goodbye embed"
     )
     .setDefaultMemberPermissions(
       PermissionFlagsBits.ManageGuild
     )
 
-    .addSubcommand(sub =>
-      sub
-        .setName("setup")
-        .setDescription(
-          "Quickly configure the goodbye system"
-        )
-
-        .addChannelOption(opt =>
-          opt
-            .setName("channel")
-            .setDescription(
-              "Channel where goodbye messages are sent"
-            )
-            .addChannelTypes(
-              ChannelType.GuildText,
-              ChannelType.GuildAnnouncement
-            )
-            .setRequired(true)
-        )
-
-        .addStringOption(opt =>
-          opt
-            .setName("message")
-            .setDescription(
-              "Goodbye message"
-            )
-            .setRequired(false)
-        )
-
-        .addStringOption(opt =>
-          opt
-            .setName("gif")
-            .setDescription(
-              "Image/GIF URL"
-            )
-            .setRequired(false)
-        )
-
-        .addStringOption(opt =>
-          opt
-            .setName("color")
-            .setDescription(
-              "Embed color, e.g. #ED4245"
-            )
-            .setRequired(false)
-        )
-    )
-
-    .addSubcommand(sub =>
-      sub
-        .setName("disable")
-        .setDescription(
-          "Disable goodbye messages"
-        )
-    )
-
-    .addSubcommand(sub =>
-      sub
-        .setName("test")
-        .setDescription(
-          "Preview the current goodbye message"
-        )
-    )
-
 ].map(command => command.toJSON());
 
 // ============================================================
-// PREMIUM PANEL EMBED
+// PREMIUM CONFIGURATION PANEL
 // ============================================================
 
 function buildPanel(system, guildId) {
@@ -443,131 +461,188 @@ function buildPanel(system, guildId) {
   const cfg = guildConfig(guildId);
   const settings = cfg[system];
 
-  const welcome = system === "welcome";
+  const welcome =
+    system === "welcome";
 
-  const name = welcome
-    ? "WELCOME"
-    : "GOODBYE";
+  const name =
+    welcome
+      ? "WELCOME"
+      : "GOODBYE";
 
-  const icon = welcome
-    ? "🎉"
-    : "👋";
+  const icon =
+    welcome
+      ? "🎉"
+      : "👋";
 
-  const defaultColor = welcome
-    ? "#5865F2"
-    : "#ED4245";
+  const defaultColor =
+    welcome
+      ? "#5865F2"
+      : "#ED4245";
 
-  const status = settings.enabled
-    ? "🟢 ACTIVE"
-    : "🔴 DISABLED";
+  const status =
+    settings.enabled
+      ? "🟢 **ACTIVE**"
+      : "🔴 **DISABLED**";
 
-  const channel = settings.channel
-    ? `<#${settings.channel}>`
-    : "Not configured";
+  const channel =
+    settings.channel
+      ? `<#${settings.channel}>`
+      : "`Not configured`";
 
   const media =
     settings.gif ||
     settings.image
-      ? "🖼️ Configured"
-      : "Not configured";
+      ? "🖼️ **Configured**"
+      : "`Not configured`";
 
   const footer =
     settings.footer ||
-    "JRC • Premium Configuration";
+    `JRC • Premium ${name} System`;
 
-  const embed = new EmbedBuilder()
-    .setTitle(
-      `✦ JRC • ${name} SYSTEM`
-    )
-    .setDescription(
-      `> ${welcome
-        ? "Create a personalized greeting for every member who joins your community."
-        : "Customize the message shown whenever a member leaves your community."
-      }\n\n` +
+  const embed =
+    new EmbedBuilder()
+      .setAuthor({
+        name:
+          `JRC • ${name} CONFIGURATION`,
+        iconURL:
+          client.user?.displayAvatarURL() || undefined
+      })
+      .setTitle(
+        `${icon} ${name} SYSTEM`
+      )
+      .setDescription(
+        welcome
+          ? "Configure how JRC welcomes new members into your server."
+          : "Configure how JRC says goodbye when members leave your server."
+      )
+      .addFields(
+        {
+          name: "SYSTEM STATUS",
+          value: status,
+          inline: true
+        },
+        {
+          name: "CHANNEL",
+          value: channel,
+          inline: true
+        },
+        {
+          name: "EMBED COLOR",
+          value:
+            `\`${settings.color || defaultColor}\``,
+          inline: true
+        },
+        {
+          name: "GREETING / TITLE",
+          value:
+            settings.title ||
+            "`Not configured`",
+          inline: false
+        },
+        {
+          name: "DESCRIPTION",
+          value:
+            settings.description ||
+            "`Not configured`",
+          inline: false
+        },
+        {
+          name: "MESSAGE",
+          value:
+            settings.message ||
+            "`Not configured`",
+          inline: false
+        },
+        {
+          name: "MEDIA",
+          value: media,
+          inline: true
+        },
+        {
+          name: "VARIABLES",
+          value:
+            "`{user}`  `{username}`  `{server}`",
+          inline: true
+        }
+      )
+      .setColor(
+        validColor(settings.color)
+          ? settings.color
+          : defaultColor
+      )
+      .setFooter({
+        text: footer
+      })
+      .setTimestamp();
 
-      `**SYSTEM STATUS**\n` +
-      `${status}\n\n` +
+  if (settings.thumbnail !== false) {
 
-      `**CHANNEL**\n` +
-      `${channel}\n\n` +
-
-      `**GREETING / TITLE**\n` +
-      `${settings.title || "Not configured"}\n\n` +
-
-      `**DESCRIPTION**\n` +
-      `${settings.description || "Not configured"}\n\n` +
-
-      `**MESSAGE**\n` +
-      `${settings.message || "Not configured"}\n\n` +
-
-      `**MEDIA**\n` +
-      `${media}\n\n` +
-
-      `**EMBED COLOR**\n` +
-      `\`${settings.color || defaultColor}\``
-    )
-    .setColor(
-      validColor(settings.color)
-        ? settings.color
-        : defaultColor
-    )
-    .setFooter({
-      text: footer
-    })
-    .setTimestamp();
-
-  const configure = new ButtonBuilder()
-    .setCustomId(
-      `jrc_${system}_configure`
-    )
-    .setLabel("Configure")
-    .setEmoji("⚙️")
-    .setStyle(ButtonStyle.Primary);
-
-  const channelButton = new ButtonBuilder()
-    .setCustomId(
-      `jrc_${system}_channel`
-    )
-    .setLabel("Channel")
-    .setEmoji("📢")
-    .setStyle(ButtonStyle.Secondary);
-
-  const preview = new ButtonBuilder()
-    .setCustomId(
-      `jrc_${system}_preview`
-    )
-    .setLabel("Preview")
-    .setEmoji("👁️")
-    .setStyle(ButtonStyle.Secondary);
-
-  const enable = new ButtonBuilder()
-    .setCustomId(
-      `jrc_${system}_enable`
-    )
-    .setLabel("Enable")
-    .setEmoji("🟢")
-    .setStyle(ButtonStyle.Success);
-
-  const disable = new ButtonBuilder()
-    .setCustomId(
-      `jrc_${system}_disable`
-    )
-    .setLabel("Disable")
-    .setEmoji("🔴")
-    .setStyle(ButtonStyle.Danger);
-
-  const row1 = new ActionRowBuilder()
-    .addComponents(
-      configure,
-      channelButton,
-      preview
+    embed.setThumbnail(
+      client.user?.displayAvatarURL({
+        size: 256
+      }) || null
     );
+  }
 
-  const row2 = new ActionRowBuilder()
-    .addComponents(
-      enable,
-      disable
-    );
+  const configure =
+    new ButtonBuilder()
+      .setCustomId(
+        `jrc_${system}_configure`
+      )
+      .setLabel("Configure")
+      .setEmoji("⚙️")
+      .setStyle(ButtonStyle.Primary);
+
+  const channelButton =
+    new ButtonBuilder()
+      .setCustomId(
+        `jrc_${system}_channel`
+      )
+      .setLabel("Channel")
+      .setEmoji("📢")
+      .setStyle(ButtonStyle.Secondary);
+
+  const preview =
+    new ButtonBuilder()
+      .setCustomId(
+        `jrc_${system}_preview`
+      )
+      .setLabel("Preview")
+      .setEmoji("👁️")
+      .setStyle(ButtonStyle.Secondary);
+
+  const enable =
+    new ButtonBuilder()
+      .setCustomId(
+        `jrc_${system}_enable`
+      )
+      .setLabel("Enable")
+      .setEmoji("🟢")
+      .setStyle(ButtonStyle.Success);
+
+  const disable =
+    new ButtonBuilder()
+      .setCustomId(
+        `jrc_${system}_disable`
+      )
+      .setLabel("Disable")
+      .setEmoji("🔴")
+      .setStyle(ButtonStyle.Danger);
+
+  const row1 =
+    new ActionRowBuilder()
+      .addComponents(
+        configure,
+        channelButton,
+        preview
+      );
+
+  const row2 =
+    new ActionRowBuilder()
+      .addComponents(
+        enable,
+        disable
+      );
 
   return {
     embeds: [embed],
@@ -590,93 +665,99 @@ function buildConfigModal(
   const welcome =
     system === "welcome";
 
-  const modal = new ModalBuilder()
-    .setCustomId(
-      `jrc_${system}_modal`
-    )
-    .setTitle(
-      welcome
-        ? "JRC • Welcome Configuration"
-        : "JRC • Goodbye Configuration"
-    );
+  const modal =
+    new ModalBuilder()
+      .setCustomId(
+        `jrc_${system}_modal`
+      )
+      .setTitle(
+        welcome
+          ? "JRC • Welcome Configuration"
+          : "JRC • Goodbye Configuration"
+      );
 
-  const title = new TextInputBuilder()
-    .setCustomId("title")
-    .setLabel("Greeting / Embed Title")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder(
-      welcome
-        ? "🎉 Welcome {user}!"
-        : "👋 Goodbye {user}"
-    )
-    .setMaxLength(256)
-    .setRequired(true)
-    .setValue(
-      settings.title || ""
-    );
+  const title =
+    new TextInputBuilder()
+      .setCustomId("title")
+      .setLabel("Greeting / Embed Title")
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder(
+        welcome
+          ? "🎉 Welcome {user}!"
+          : "👋 Goodbye {user}"
+      )
+      .setMaxLength(256)
+      .setRequired(true)
+      .setValue(
+        settings.title || ""
+      );
 
-  const description = new TextInputBuilder()
-    .setCustomId("description")
-    .setLabel("Description")
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder(
-      welcome
-        ? "We're glad to have you here!"
-        : "Thanks for being part of our community!"
-    )
-    .setMaxLength(4000)
-    .setRequired(true)
-    .setValue(
-      settings.description || ""
-    );
+  const description =
+    new TextInputBuilder()
+      .setCustomId("description")
+      .setLabel("Description")
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder(
+        welcome
+          ? "We're glad to have you here!"
+          : "Thanks for being part of our community!"
+      )
+      .setMaxLength(4000)
+      .setRequired(true)
+      .setValue(
+        settings.description || ""
+      );
 
-  const message = new TextInputBuilder()
-    .setCustomId("message")
-    .setLabel("Greeting Message")
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder(
-      "Welcome {user} to {server}!"
-    )
-    .setMaxLength(4000)
-    .setRequired(true)
-    .setValue(
-      settings.message || ""
-    );
+  const message =
+    new TextInputBuilder()
+      .setCustomId("message")
+      .setLabel("Greeting Message")
+      .setStyle(TextInputStyle.Paragraph)
+      .setPlaceholder(
+        "Welcome {user} to {server}!"
+      )
+      .setMaxLength(4000)
+      .setRequired(true)
+      .setValue(
+        settings.message || ""
+      );
 
-  const color = new TextInputBuilder()
-    .setCustomId("color")
-    .setLabel("Embed Color")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder(
-      welcome
-        ? "#5865F2"
-        : "#ED4245"
-    )
-    .setMaxLength(7)
-    .setRequired(true)
-    .setValue(
-      settings.color ||
-      (
+  const color =
+    new TextInputBuilder()
+      .setCustomId("color")
+      .setLabel("Embed Color")
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder(
         welcome
           ? "#5865F2"
           : "#ED4245"
       )
-    );
+      .setMaxLength(7)
+      .setRequired(true)
+      .setValue(
+        settings.color ||
+        (
+          welcome
+            ? "#5865F2"
+            : "#ED4245"
+        )
+      );
 
-  const media = new TextInputBuilder()
-    .setCustomId("media")
-    .setLabel("Image / GIF URL")
-    .setStyle(TextInputStyle.Short)
-    .setPlaceholder(
-      "https://example.com/image.gif"
-    )
-    .setMaxLength(1000)
-    .setRequired(false)
-    .setValue(
-      settings.gif ||
-      settings.image ||
-      ""
-    );
+  const media =
+    new TextInputBuilder()
+      .setCustomId("media")
+      .setLabel("Image / GIF URL")
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder(
+        "https://example.com/image.gif"
+      )
+      .setMaxLength(1000)
+      .setRequired(false)
+      .setValue(
+        settings.gif ||
+        settings.image ||
+        ""
+      );
 
   modal.addComponents(
     new ActionRowBuilder()
@@ -699,7 +780,102 @@ function buildConfigModal(
 }
 
 // ============================================================
-// SEND WELCOME EMBED
+// BUILD MEMBER EMBED
+// ============================================================
+
+function buildMemberEmbed(
+  system,
+  member
+) {
+
+  const cfg =
+    guildConfig(
+      member.guild.id
+    );
+
+  const settings =
+    cfg[system];
+
+  const defaultColor =
+    system === "welcome"
+      ? "#5865F2"
+      : "#ED4245";
+
+  const title =
+    replaceVariables(
+      settings.title,
+      member
+    );
+
+  const description =
+    replaceVariables(
+      settings.description,
+      member
+    );
+
+  const message =
+    replaceVariables(
+      settings.message,
+      member
+    );
+
+  const embed =
+    new EmbedBuilder()
+      .setTitle(title)
+      .setDescription(
+        `${description}\n\n${message}`
+      )
+      .setColor(
+        validColor(settings.color)
+          ? settings.color
+          : defaultColor
+      );
+
+  if (settings.thumbnail !== false) {
+
+    embed.setThumbnail(
+      member.user.displayAvatarURL({
+        size: 256,
+        extension: "png"
+      })
+    );
+  }
+
+  const media =
+    settings.gif ||
+    settings.image;
+
+  if (validImage(media)) {
+    embed.setImage(media);
+  }
+
+  if (settings.footer) {
+
+    embed.setFooter({
+      text:
+        replaceVariables(
+          settings.footer,
+          member
+        )
+    });
+
+  } else {
+
+    embed.setFooter({
+      text:
+        `${member.guild.name} • JRC ${system}`
+    });
+  }
+
+  if (settings.timestamp !== false) {
+    embed.setTimestamp();
+  }
+
+  return embed;
+}
+
+// ============================================================
+// SEND WELCOME
 // ============================================================
 
 async function sendWelcome(member) {
@@ -727,76 +903,11 @@ async function sendWelcome(member) {
     !channel.isTextBased()
   ) return;
 
-  const title =
-    replaceVariables(
-      settings.title,
-      member
-    );
-
-  const description =
-    replaceVariables(
-      settings.description,
-      member
-    );
-
-  const message =
-    replaceVariables(
-      settings.message,
-      member
-    );
-
   const embed =
-    new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(
-        `${description}\n\n${message}`
-      )
-      .setColor(
-        validColor(settings.color)
-          ? settings.color
-          : "#5865F2"
-      );
-
-  if (settings.thumbnail !== false) {
-
-    embed.setThumbnail(
-      member.user.displayAvatarURL({
-        size: 256,
-        extension: "png"
-      })
+    buildMemberEmbed(
+      "welcome",
+      member
     );
-  }
-
-  const media =
-    settings.gif ||
-    settings.image;
-
-  if (validImage(media)) {
-
-    embed.setImage(media);
-  }
-
-  if (settings.footer) {
-
-    embed.setFooter({
-      text: replaceVariables(
-        settings.footer,
-        member
-      )
-    });
-
-  } else {
-
-    embed.setFooter({
-      text:
-        `${member.guild.name} • JRC Welcome`
-    });
-  }
-
-  if (settings.timestamp !== false) {
-
-    embed.setTimestamp();
-  }
 
   try {
 
@@ -816,7 +927,7 @@ async function sendWelcome(member) {
 }
 
 // ============================================================
-// SEND GOODBYE EMBED
+// SEND GOODBYE
 // ============================================================
 
 async function sendGoodbye(member) {
@@ -844,76 +955,11 @@ async function sendGoodbye(member) {
     !channel.isTextBased()
   ) return;
 
-  const title =
-    replaceVariables(
-      settings.title,
-      member
-    );
-
-  const description =
-    replaceVariables(
-      settings.description,
-      member
-    );
-
-  const message =
-    replaceVariables(
-      settings.message,
-      member
-    );
-
   const embed =
-    new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(
-        `${description}\n\n${message}`
-      )
-      .setColor(
-        validColor(settings.color)
-          ? settings.color
-          : "#ED4245"
-      );
-
-  if (settings.thumbnail !== false) {
-
-    embed.setThumbnail(
-      member.user.displayAvatarURL({
-        size: 256,
-        extension: "png"
-      })
+    buildMemberEmbed(
+      "goodbye",
+      member
     );
-  }
-
-  const media =
-    settings.gif ||
-    settings.image;
-
-  if (validImage(media)) {
-
-    embed.setImage(media);
-  }
-
-  if (settings.footer) {
-
-    embed.setFooter({
-      text: replaceVariables(
-        settings.footer,
-        member
-      )
-    });
-
-  } else {
-
-    embed.setFooter({
-      text:
-        `${member.guild.name} • JRC Goodbye`
-    });
-  }
-
-  if (settings.timestamp !== false) {
-
-    embed.setTimestamp();
-  }
 
   try {
 
@@ -1028,7 +1074,7 @@ client.on(
 );
 
 // ============================================================
-// CHAT COMMANDS
+// SLASH COMMANDS
 // ============================================================
 
 client.on(
@@ -1039,388 +1085,313 @@ client.on(
       !interaction.isChatInputCommand()
     ) return;
 
-    // --------------------------------------------------------
-    // WELCOME
-    // --------------------------------------------------------
+    if (!interaction.guild) {
+
+      return interaction.reply({
+        content:
+          "❌ This command can only be used inside a server.",
+        ephemeral: true
+      });
+    }
+
+    const guildId =
+      interaction.guild.id;
+
+    const cfg =
+      guildConfig(guildId);
+
+    // ========================================================
+    // /WELCOME
+    // ========================================================
 
     if (
       interaction.commandName === "welcome"
     ) {
 
-      const cfg =
-        guildConfig(
-          interaction.guild.id
-        );
-
-      const sub =
-        interaction.options.getSubcommand();
-
-      // /welcome setup
-
-      if (sub === "setup") {
-
-        const channel =
-          interaction.options.getChannel(
-            "channel"
-          );
-
-        const message =
-          interaction.options.getString(
-            "message"
-          );
-
-        const gif =
-          interaction.options.getString(
-            "gif"
-          );
-
-        const color =
-          interaction.options.getString(
-            "color"
-          );
-
-        if (
-          gif &&
-          !validImage(gif)
-        ) {
-
-          return interaction.reply({
-            content:
-              "❌ That doesn't look like a valid image/GIF URL.",
-            ephemeral: true
-          });
-        }
-
-        if (
-          color &&
-          !validColor(color)
-        ) {
-
-          return interaction.reply({
-            content:
-              "❌ Invalid color. Use something like `#5865F2`.",
-            ephemeral: true
-          });
-        }
-
-        cfg.welcome.enabled =
-          true;
-
-        cfg.welcome.channel =
-          channel.id;
-
-        if (message)
-          cfg.welcome.message =
-            message;
-
-        if (gif) {
-
-          cfg.welcome.gif =
-            gif;
-
-          cfg.welcome.image =
-            gif;
-        }
-
-        if (color)
-          cfg.welcome.color =
-            color;
-
-        saveConfig();
-
-        return interaction.reply({
-          content:
-            "🎉 **JRC Welcome System Enabled!**\n\n" +
-            `📢 Channel: ${channel}\n` +
-            `💬 Message: ${cfg.welcome.message}\n` +
-            `🎨 Color: ${cfg.welcome.color}`,
-          ephemeral: true
-        });
-      }
-
-      // /welcome disable
-
-      if (sub === "disable") {
-
-        cfg.welcome.enabled =
-          false;
-
-        saveConfig();
-
-        return interaction.reply({
-          content:
-            "🔴 **JRC Welcome System Disabled.**",
-          ephemeral: true
-        });
-      }
-
-      // /welcome test
-
-      if (sub === "test") {
-
-        const settings =
-          cfg.welcome;
-
-        if (!settings.channel) {
-
-          return interaction.reply({
-            content:
-              "❌ Welcome isn't configured yet.",
-            ephemeral: true
-          });
-        }
-
-        const member =
-          interaction.member;
-
-        const embed =
-          new EmbedBuilder()
-            .setTitle(
-              replaceVariables(
-                settings.title,
-                member
-              )
-            )
-            .setDescription(
-              `${replaceVariables(
-                settings.description,
-                member
-              )}\n\n${replaceVariables(
-                settings.message,
-                member
-              )}`
-            )
-            .setColor(
-              validColor(settings.color)
-                ? settings.color
-                : "#5865F2"
-            )
-            .setThumbnail(
-              interaction.user.displayAvatarURL({
-                size: 256
-              })
-            )
-            .setFooter({
-              text:
-                `${interaction.guild.name} • JRC Preview`
-            })
-            .setTimestamp();
-
-        const media =
-          settings.gif ||
-          settings.image;
-
-        if (validImage(media))
-          embed.setImage(media);
-
-        return interaction.reply({
-          content:
-            "👁️ **JRC Welcome Preview**",
-          embeds: [embed],
-          ephemeral: true
-        });
-      }
-
-      // ------------------------------------------------------
-      // FALLBACK PANEL
-      // ------------------------------------------------------
-
       return interaction.reply(
         buildPanel(
           "welcome",
-          interaction.guild.id
+          guildId
         )
       );
     }
 
-    // --------------------------------------------------------
-    // GOODBYE
-    // --------------------------------------------------------
+    // ========================================================
+    // /GOODBYE
+    // ========================================================
 
     if (
       interaction.commandName === "goodbye"
     ) {
 
-      const cfg =
-        guildConfig(
-          interaction.guild.id
-        );
-
-      const sub =
-        interaction.options.getSubcommand();
-
-      // /goodbye setup
-
-      if (sub === "setup") {
-
-        const channel =
-          interaction.options.getChannel(
-            "channel"
-          );
-
-        const message =
-          interaction.options.getString(
-            "message"
-          );
-
-        const gif =
-          interaction.options.getString(
-            "gif"
-          );
-
-        const color =
-          interaction.options.getString(
-            "color"
-          );
-
-        if (
-          gif &&
-          !validImage(gif)
-        ) {
-
-          return interaction.reply({
-            content:
-              "❌ That doesn't look like a valid image/GIF URL.",
-            ephemeral: true
-          });
-        }
-
-        if (
-          color &&
-          !validColor(color)
-        ) {
-
-          return interaction.reply({
-            content:
-              "❌ Invalid color. Use something like `#ED4245`.",
-            ephemeral: true
-          });
-        }
-
-        cfg.goodbye.enabled =
-          true;
-
-        cfg.goodbye.channel =
-          channel.id;
-
-        if (message)
-          cfg.goodbye.message =
-            message;
-
-        if (gif) {
-
-          cfg.goodbye.gif =
-            gif;
-
-          cfg.goodbye.image =
-            gif;
-        }
-
-        if (color)
-          cfg.goodbye.color =
-            color;
-
-        saveConfig();
-
-        return interaction.reply({
-          content:
-            "👋 **JRC Goodbye System Enabled!**\n\n" +
-            `📢 Channel: ${channel}\n` +
-            `💬 Message: ${cfg.goodbye.message}\n` +
-            `🎨 Color: ${cfg.goodbye.color}`,
-          ephemeral: true
-        });
-      }
-
-      // /goodbye disable
-
-      if (sub === "disable") {
-
-        cfg.goodbye.enabled =
-          false;
-
-        saveConfig();
-
-        return interaction.reply({
-          content:
-            "🔴 **JRC Goodbye System Disabled.**",
-          ephemeral: true
-        });
-      }
-
-      // /goodbye test
-
-      if (sub === "test") {
-
-        const settings =
-          cfg.goodbye;
-
-        if (!settings.channel) {
-
-          return interaction.reply({
-            content:
-              "❌ Goodbye isn't configured yet.",
-            ephemeral: true
-          });
-        }
-
-        const member =
-          interaction.member;
-
-        const embed =
-          new EmbedBuilder()
-            .setTitle(
-              replaceVariables(
-                settings.title,
-                member
-              )
-            )
-            .setDescription(
-              `${replaceVariables(
-                settings.description,
-                member
-              )}\n\n${replaceVariables(
-                settings.message,
-                member
-              )}`
-            )
-            .setColor(
-              validColor(settings.color)
-                ? settings.color
-                : "#ED4245"
-            )
-            .setThumbnail(
-              interaction.user.displayAvatarURL({
-                size: 256
-              })
-            )
-            .setFooter({
-              text:
-                `${interaction.guild.name} • JRC Preview`
-            })
-            .setTimestamp();
-
-        const media =
-          settings.gif ||
-          settings.image;
-
-        if (validImage(media))
-          embed.setImage(media);
-
-        return interaction.reply({
-          content:
-            "👁️ **JRC Goodbye Preview**",
-          embeds: [embed],
-          ephemeral: true
-        });
-      }
-
       return interaction.reply(
         buildPanel(
           "goodbye",
-          interaction.guild.id
+          guildId
         )
       );
+    }
+
+    // ========================================================
+    // /WELCOME-SETUP
+    // ========================================================
+
+    if (
+      interaction.commandName === "welcome-setup"
+    ) {
+
+      const channel =
+        interaction.options.getChannel(
+          "channel"
+        );
+
+      const message =
+        interaction.options.getString(
+          "message"
+        );
+
+      const gif =
+        interaction.options.getString(
+          "gif"
+        );
+
+      const color =
+        interaction.options.getString(
+          "color"
+        );
+
+      if (
+        gif &&
+        !validImage(gif)
+      ) {
+
+        return interaction.reply({
+          content:
+            "❌ That doesn't look like a valid image/GIF URL.",
+          ephemeral: true
+        });
+      }
+
+      if (
+        color &&
+        !validColor(color)
+      ) {
+
+        return interaction.reply({
+          content:
+            "❌ Invalid color. Use something like `#5865F2`.",
+          ephemeral: true
+        });
+      }
+
+      cfg.welcome.enabled =
+        true;
+
+      cfg.welcome.channel =
+        channel.id;
+
+      if (message) {
+        cfg.welcome.message =
+          message;
+      }
+
+      if (gif) {
+
+        cfg.welcome.gif =
+          gif;
+
+        cfg.welcome.image =
+          gif;
+      }
+
+      if (color) {
+        cfg.welcome.color =
+          color;
+      }
+
+      saveConfig();
+
+      return interaction.reply({
+        content:
+          "🎉 **JRC Welcome System Enabled!**\n\n" +
+          `📢 Channel: ${channel}\n` +
+          `💬 Message: ${cfg.welcome.message}\n` +
+          `🎨 Color: ${cfg.welcome.color}`,
+        ephemeral: true
+      });
+    }
+
+    // ========================================================
+    // /GOODBYE-SETUP
+    // ========================================================
+
+    if (
+      interaction.commandName === "goodbye-setup"
+    ) {
+
+      const channel =
+        interaction.options.getChannel(
+          "channel"
+        );
+
+      const message =
+        interaction.options.getString(
+          "message"
+        );
+
+      const gif =
+        interaction.options.getString(
+          "gif"
+        );
+
+      const color =
+        interaction.options.getString(
+          "color"
+        );
+
+      if (
+        gif &&
+        !validImage(gif)
+      ) {
+
+        return interaction.reply({
+          content:
+            "❌ That doesn't look like a valid image/GIF URL.",
+          ephemeral: true
+        });
+      }
+
+      if (
+        color &&
+        !validColor(color)
+      ) {
+
+        return interaction.reply({
+          content:
+            "❌ Invalid color. Use something like `#ED4245`.",
+          ephemeral: true
+        });
+      }
+
+      cfg.goodbye.enabled =
+        true;
+
+      cfg.goodbye.channel =
+        channel.id;
+
+      if (message) {
+        cfg.goodbye.message =
+          message;
+      }
+
+      if (gif) {
+
+        cfg.goodbye.gif =
+          gif;
+
+        cfg.goodbye.image =
+          gif;
+      }
+
+      if (color) {
+        cfg.goodbye.color =
+          color;
+      }
+
+      saveConfig();
+
+      return interaction.reply({
+        content:
+          "👋 **JRC Goodbye System Enabled!**\n\n" +
+          `📢 Channel: ${channel}\n` +
+          `💬 Message: ${cfg.goodbye.message}\n` +
+          `🎨 Color: ${cfg.goodbye.color}`,
+        ephemeral: true
+      });
+    }
+
+    // ========================================================
+    // /WELCOME-DISABLE
+    // ========================================================
+
+    if (
+      interaction.commandName === "welcome-disable"
+    ) {
+
+      cfg.welcome.enabled =
+        false;
+
+      saveConfig();
+
+      return interaction.reply({
+        content:
+          "🔴 **JRC Welcome System Disabled.**",
+        ephemeral: true
+      });
+    }
+
+    // ========================================================
+    // /GOODBYE-DISABLE
+    // ========================================================
+
+    if (
+      interaction.commandName === "goodbye-disable"
+    ) {
+
+      cfg.goodbye.enabled =
+        false;
+
+      saveConfig();
+
+      return interaction.reply({
+        content:
+          "🔴 **JRC Goodbye System Disabled.**",
+        ephemeral: true
+      });
+    }
+
+    // ========================================================
+    // /WELCOME-TEST
+    // ========================================================
+
+    if (
+      interaction.commandName === "welcome-test"
+    ) {
+
+      const embed =
+        buildMemberEmbed(
+          "welcome",
+          interaction.member
+        );
+
+      return interaction.reply({
+        content:
+          "👁️ **JRC Welcome Preview**",
+        embeds: [embed],
+        ephemeral: true
+      });
+    }
+
+    // ========================================================
+    // /GOODBYE-TEST
+    // ========================================================
+
+    if (
+      interaction.commandName === "goodbye-test"
+    ) {
+
+      const embed =
+        buildMemberEmbed(
+          "goodbye",
+          interaction.member
+        );
+
+      return interaction.reply({
+        content:
+          "👁️ **JRC Goodbye Preview**",
+        embeds: [embed],
+        ephemeral: true
+      });
     }
   }
 );
@@ -1468,9 +1439,9 @@ client.on(
       const settings =
         cfg[system];
 
-      // ------------------------------------------------------
+      // ======================================================
       // CONFIGURE
-      // ------------------------------------------------------
+      // ======================================================
 
       if (
         action === "configure"
@@ -1484,9 +1455,9 @@ client.on(
         );
       }
 
-      // ------------------------------------------------------
-      // CHANNEL SELECT
-      // ------------------------------------------------------
+      // ======================================================
+      // CHANNEL
+      // ======================================================
 
       if (
         action === "channel"
@@ -1520,9 +1491,9 @@ client.on(
         });
       }
 
-      // ------------------------------------------------------
+      // ======================================================
       // ENABLE
-      // ------------------------------------------------------
+      // ======================================================
 
       if (
         action === "enable"
@@ -1550,9 +1521,9 @@ client.on(
         );
       }
 
-      // ------------------------------------------------------
+      // ======================================================
       // DISABLE
-      // ------------------------------------------------------
+      // ======================================================
 
       if (
         action === "disable"
@@ -1571,64 +1542,23 @@ client.on(
         );
       }
 
-      // ------------------------------------------------------
+      // ======================================================
       // PREVIEW
-      // ------------------------------------------------------
+      // ======================================================
 
       if (
         action === "preview"
       ) {
 
-        const member =
-          interaction.member;
-
         const embed =
-          new EmbedBuilder()
-            .setTitle(
-              replaceVariables(
-                settings.title,
-                member
-              )
-            )
-            .setDescription(
-              `${replaceVariables(
-                settings.description,
-                member
-              )}\n\n${replaceVariables(
-                settings.message,
-                member
-              )}`
-            )
-            .setColor(
-              validColor(settings.color)
-                ? settings.color
-                : (
-                  system === "welcome"
-                    ? "#5865F2"
-                    : "#ED4245"
-                )
-            )
-            .setThumbnail(
-              interaction.user.displayAvatarURL({
-                size: 256
-              })
-            )
-            .setFooter({
-              text:
-                `${interaction.guild.name} • JRC Preview`
-            })
-            .setTimestamp();
-
-        const media =
-          settings.gif ||
-          settings.image;
-
-        if (validImage(media))
-          embed.setImage(media);
+          buildMemberEmbed(
+            system,
+            interaction.member
+          );
 
         return interaction.reply({
           content:
-            `👁️ **JRC ${system} preview**`,
+            `👁️ **JRC ${system.toUpperCase()} PREVIEW**`,
           embeds: [embed],
           ephemeral: true
         });
@@ -1636,7 +1566,7 @@ client.on(
     }
 
     // ========================================================
-    // CHANNEL SELECT SUBMISSION
+    // CHANNEL SELECT
     // ========================================================
 
     if (
@@ -1661,6 +1591,11 @@ client.on(
 
       if (
         action !== "channel"
+      ) return;
+
+      if (
+        system !== "welcome" &&
+        system !== "goodbye"
       ) return;
 
       const channel =
@@ -1759,9 +1694,9 @@ client.on(
           "media"
         );
 
-      // ------------------------------------------------------
+      // ======================================================
       // VALIDATE COLOR
-      // ------------------------------------------------------
+      // ======================================================
 
       if (
         !validColor(color)
@@ -1774,9 +1709,9 @@ client.on(
         });
       }
 
-      // ------------------------------------------------------
+      // ======================================================
       // VALIDATE MEDIA
-      // ------------------------------------------------------
+      // ======================================================
 
       if (
         media &&
@@ -1790,9 +1725,9 @@ client.on(
         });
       }
 
-      // ------------------------------------------------------
+      // ======================================================
       // SAVE
-      // ------------------------------------------------------
+      // ======================================================
 
       settings.title =
         title;
@@ -1842,6 +1777,7 @@ client.on(
 client.on(
   "error",
   error => {
+
     console.error(
       "❌ Discord client error:",
       error
@@ -1852,6 +1788,7 @@ client.on(
 process.on(
   "unhandledRejection",
   error => {
+
     console.error(
       "❌ Unhandled rejection:",
       error
@@ -1863,7 +1800,9 @@ process.on(
 // LOGIN
 // ============================================================
 
-if (!process.env.DISCORD_TOKEN) {
+if (
+  !process.env.DISCORD_TOKEN
+) {
 
   console.error(
     "❌ DISCORD_TOKEN is missing from your environment variables."
@@ -1872,7 +1811,9 @@ if (!process.env.DISCORD_TOKEN) {
   process.exit(1);
 }
 
-if (!process.env.CLIENT_ID) {
+if (
+  !process.env.CLIENT_ID
+) {
 
   console.error(
     "❌ CLIENT_ID is missing from your environment variables."
@@ -1884,12 +1825,3 @@ if (!process.env.CLIENT_ID) {
 client.login(
   process.env.DISCORD_TOKEN
 );
-
-
-
-
-
-
-
-
-
