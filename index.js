@@ -840,7 +840,7 @@ commands.push(
           o.setName("channel").setDescription("Channel")
         )
     )
-
+);
 
 commands.push
   new SlashCommandBuilder()
@@ -885,8 +885,8 @@ commands.push
             .setRequired(true)
         )
     )
+    )
     .toJSON()
-);
 
 
 
