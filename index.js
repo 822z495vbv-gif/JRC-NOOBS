@@ -850,13 +850,16 @@ commands.push(
       s
         .setName("8ball")
         .setDescription("Ask the 8ball")
-        .addStringOption(o =>
+                .addStringOption(o =>
           o
             .setName("question")
             .setDescription("Question")
             .setRequired(true)
         )
+      )
     )
+.toJSON(),
+
     .addSubcommand(s =>
       s.setName("coinflip").setDescription("Flip a coin")
     )
