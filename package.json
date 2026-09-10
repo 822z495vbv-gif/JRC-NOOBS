@@ -1,12 +1,12 @@
 {
-  "name": "JRC BOT",
+  "name": "jrc-bot",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.21.0",
-    "dotenv": "^17.2.1"
+    "discord.js": "^14.25.1",
+    "dotenv": "^16.6.1"
   }
 }
