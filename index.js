@@ -9,40 +9,32 @@ const {
   ButtonBuilder,
   ButtonStyle,
   PermissionFlagsBits,
-  ActivityType,
-  AuditLogEvent
+  ActivityType
 } = require('discord.js');
 require('dotenv').config();
 
 // ==========================================
-// --- COLOR PALETTE & GLOBAL CONFIGURATION ---
+// --- HIGH-PERFORMANCE GLOBAL PALETTE ---
 // ==========================================
 const PALETTE = {
-  DARK: '#2B2D31',
-  SUCCESS: '#57F287',
-  ERROR: '#ED4245',
+  DARK: '#1E1F22',
+  SUCCESS: '#23A55A',
+  ERROR: '#F23F43',
   GOLD: '#FEE75C',
   INFO: '#5865F2',
-  WARNING: '#FEE75C',
-  PURPLE: '#9B59B6'
+  PURPLE: '#8559DA'
 };
 
 // ==========================================
-// --- IN-MEMORY STORAGE MAPS ---
+// --- O(1) IN-MEMORY STORAGE CACHE ---
 // ==========================================
 const economy = new Map();
 const leveling = new Map();
 const warnings = new Map();
-const banTracker = new Map();
 const welcomeConfig = new Map();
 const goodbyeConfig = new Map();
-const automodConfig = new Map();
-const reactionRoles = new Map();
-const logChannels = new Map();
-const antiNukeConfig = new Map();
-const antiRaidConfig = new Map();
 
-// Helper functions for data management
+// Optimized data access wrappers
 const getEco = (id) => economy.get(id) || { wallet: 1000, bank: 0, lastDaily: 0, lastWork: 0 };
 const setEco = (id, data) => economy.set(id, data);
 
@@ -57,133 +49,71 @@ const addWarn = (id, warn) => {
 };
 
 // ==========================================
-// --- COMPREHENSIVE COMMAND DEFINITIONS ---
+// --- ENTERPRISE COMMAND METADATA MATRIX ---
 // ==========================================
 const commands = [
-  // 1. /jrc
   new SlashCommandBuilder()
     .setName('jrc')
-    .setDescription('JRC bot core infrastructure control commands')
-    .addSubcommand(sub => sub.setName('help').setDescription('Displays comprehensive help menu and navigation'))
-    .addSubcommand(sub => sub.setName('settings').setDescription('Views global server module configuration states'))
-    .addSubcommand(sub => sub.setName('about').setDescription('Displays architectural and developer information for JRC'))
-    .addSubcommand(sub => sub.setName('status').setDescription('Performs deep telemetry check on internal system workers')),
+    .setDescription('JRC elite infrastructure telemetry and controls')
+    .addSubcommand(sub => sub.setName('help').setDescription('Displays premium command modules'))
+    .addSubcommand(sub => sub.setName('settings').setDescription('Views active system configurations'))
+    .addSubcommand(sub => sub.setName('about').setDescription('Architectural overview'))
+    .addSubcommand(sub => sub.setName('status').setDescription('Performs low-latency system diagnostics')),
 
-  // 2. /welcome
   new SlashCommandBuilder()
     .setName('welcome')
-    .setDescription('Configure automated member welcome greetings')
+    .setDescription('Configure Mimu-grade interactive welcome pipelines')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand(sub => sub.setName('setup').setDescription('Setup interactive welcome configuration dashboard'))
-    .addSubcommand(sub => sub.setName('disable').setDescription('Completely deactivates the welcome greeting engine'))
-    .addSubcommand(sub => sub.setName('test').setDescription('Dispatches a test welcome message to the designated channel'))
-    .addSubcommand(sub => sub.setName('title').setDescription('Customizes the Mimu-style embed title').addStringOption(opt => opt.setName('text').setDescription('Embed title text').setRequired(true)))
-    .addSubcommand(sub => sub.setName('message').setDescription('Customizes the textual payload for incoming members').addStringOption(opt => opt.setName('text').setDescription('Message layout text content').setRequired(true)))
-    .addSubcommand(sub => sub.setName('channel').setDescription('Designates the output channel for welcome cards').addChannelOption(opt => opt.setName('target').setDescription('Target text channel').setRequired(true)))
-    .addSubcommand(sub => sub.setName('preview').setDescription('Renders a visual preview of the currently configured welcome embed')),
+    .addSubcommand(sub => sub.setName('setup').setDescription('Launches interactive control panel'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Deactivates welcome broadcasting'))
+    .addSubcommand(sub => sub.setName('test').setDescription('Dispatches test card packet'))
+    .addSubcommand(sub => sub.setName('title').setDescription('Sets Mimu-style embed headline').addStringOption(opt => opt.setName('text').setDescription('Embed title').setRequired(true)))
+    .addSubcommand(sub => sub.setName('message').setDescription('Sets main body description').addStringOption(opt => opt.setName('text').setDescription('Message payload').setRequired(true)))
+    .addSubcommand(sub => sub.setName('channel').setDescription('Binds destination channel').addChannelOption(opt => opt.setName('target').setDescription('Target channel').setRequired(true)))
+    .addSubcommand(sub => sub.setName('preview').setDescription('Renders live preview asset')),
 
-  // 3. /goodbye
   new SlashCommandBuilder()
     .setName('goodbye')
-    .setDescription('Configure automated member departure notifications')
+    .setDescription('Configure member departure notifications')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand(sub => sub.setName('setup').setDescription('Setup interactive goodbye configuration dashboard'))
-    .addSubcommand(sub => sub.setName('disable').setDescription('Completely deactivates the departure notification engine'))
-    .addSubcommand(sub => sub.setName('test').setDescription('Dispatches a test departure notification message'))
-    .addSubcommand(sub => sub.setName('message').setDescription('Customizes the departure broadcast text').addStringOption(opt => opt.setName('text').setDescription('Message layout text content').setRequired(true)))
-    .addSubcommand(sub => sub.setName('channel').setDescription('Designates the channel for departure broadcasts').addChannelOption(opt => opt.setName('target').setDescription('Target text channel').setRequired(true)))
-    .addSubcommand(sub => sub.setName('preview').setDescription('Renders a visual preview of the goodbye embed')),
+    .addSubcommand(sub => sub.setName('setup').setDescription('Launch goodbye dashboard'))
+    .addSubcommand(sub => sub.setName('disable').setDescription('Deactivate departure engine'))
+    .addSubcommand(sub => sub.setName('test').setDescription('Dispatch test signal'))
+    .addSubcommand(sub => sub.setName('message').setDescription('Customize departure broadcast text').addStringOption(opt => opt.setName('text').setDescription('Content').setRequired(true)))
+    .addSubcommand(sub => sub.setName('channel').setDescription('Bind target channel').addChannelOption(opt => opt.setName('target').setDescription('Channel').setRequired(true)))
+    .addSubcommand(sub => sub.setName('preview').setDescription('Render goodbye preview')),
 
-  // 4. /mod
   new SlashCommandBuilder()
     .setName('mod')
-    .setDescription('Advanced server moderation toolkit')
+    .setDescription('High-speed moderation tools')
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-    .addSubcommand(sub => sub.setName('ban').setDescription('Issues an administrative ban against a member').addUserOption(opt => opt.setName('target').setDescription('Target user account').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Justification')))
-    .addSubcommand(sub => sub.setName('kick').setDescription('Expels a member from the guild').addUserOption(opt => opt.setName('target').setDescription('Target user account').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Justification')))
-    .addSubcommand(sub => sub.setName('timeout').setDescription('Restricts a user from speaking or chatting').addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)).addIntegerOption(opt => opt.setName('minutes').setDescription('Duration in minutes').setRequired(true)))
-    .addSubcommand(sub => sub.setName('warn').setDescription('Records an official administrative warning').addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Violation reason').setRequired(true)))
-    .addSubcommand(sub => sub.setName('warnings').setDescription('Inspects violation telemetry for a user').addUserOption(opt => opt.setName('target').setDescription('Target user').setRequired(true)))
-    .addSubcommand(sub => sub.setName('clear').setDescription('Purges recent messages in bulk').addIntegerOption(opt => opt.setName('amount').setDescription('Number of messages to sweep').setRequired(true)))
-    .addSubcommand(sub => sub.setName('lock').setDescription('Locks the current channel down against standard messaging'))
-    .addSubcommand(sub => sub.setName('unlock').setDescription('Restores normal messaging permissions to the channel')),
+    .addSubcommand(sub => sub.setName('ban').setDescription('Issue guild ban').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Reason')))
+    .addSubcommand(sub => sub.setName('kick').setDescription('Expel member').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Reason')))
+    .addSubcommand(sub => sub.setName('timeout').setDescription('Apply user timeout').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)).addIntegerOption(opt => opt.setName('minutes').setDescription('Mins').setRequired(true)))
+    .addSubcommand(sub => sub.setName('warn').setDescription('Issue formal warning').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)).addStringOption(opt => opt.setName('reason').setDescription('Reason').setRequired(true)))
+    .addSubcommand(sub => sub.setName('warnings').setDescription('Inspect discipline history').addUserOption(opt => opt.setName('target').setDescription('User').setRequired(true)))
+    .addSubcommand(sub => sub.setName('clear').setDescription('Purge channel traffic').addIntegerOption(opt => opt.setName('amount').setDescription('Count').setRequired(true)))
+    .addSubcommand(sub => sub.setName('lock').setDescription('Lock down text channel'))
+    .addSubcommand(sub => sub.setName('unlock').setDescription('Restore text channel')),
 
-  // 5. /automod
-  new SlashCommandBuilder()
-    .setName('automod')
-    .setDescription('Automated filter matrix and chat policing controls')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addSubcommand(sub => sub.setName('setup').setDescription('Initializes the baseline automod rule matrix'))
-    .addSubcommand(sub => sub.setName('enable').setDescription('Enforces automated chat filtering globally'))
-    .addSubcommand(sub => sub.setName('disable').setDescription('Suspends automated chat filtering rules'))
-    .addSubcommand(sub => sub.setName('words').setDescription('Manages the blocklisted terminology database'))
-    .addSubcommand(sub => sub.setName('spam').setDescription('Configures flood control and rapid message thresholds'))
-    .addSubcommand(sub => sub.setName('links').setDescription('Configures external hyperlink neutralization policies')),
-
-  // 6. /reactionrole
-  new SlashCommandBuilder()
-    .setName('reactionrole')
-    .setDescription('Interactive self-assignable role panels')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
-    .addSubcommand(sub => sub.setName('create').setDescription('Constructs a fresh reaction role embed panel'))
-    .addSubcommand(sub => sub.setName('add').setDescription('Binds a specific emoji to a selectable role'))
-    .addSubcommand(sub => sub.setName('remove').setDescription('Unbinds a reaction role mapping'))
-    .addSubcommand(sub => sub.setName('list').setDescription('Lists active reaction role interfaces in this guild')),
-
-  // 7. /logs
-  new SlashCommandBuilder()
-    .setName('logs')
-    .setDescription('Administrative audit event logging infrastructure')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addSubcommand(sub => sub.setName('setup').setDescription('Assigns an audit channel for event tracking'))
-    .addSubcommand(sub => sub.setName('disable').setDescription('Deactivates audit event broadcasting'))
-    .addSubcommand(sub => sub.setName('test').setDescription('Dispatches a test packet to verify logger delivery')),
-
-  // 8. /utility
   new SlashCommandBuilder()
     .setName('utility')
-    .setDescription('Everyday server utility telemetry commands')
-    .addSubcommand(sub => sub.setName('userinfo').setDescription('Retrieves deep account metadata').addUserOption(opt => opt.setName('target').setDescription('Target user')))
-    .addSubcommand(sub => sub.setName('serverinfo').setDescription('Inspects guild metrics and configurations'))
-    .addSubcommand(sub => sub.setName('avatar').setDescription('Extracts high-resolution user avatar asset').addUserOption(opt => opt.setName('target').setDescription('Target user')))
-    .addSubcommand(sub => sub.setName('roleinfo').setDescription('Displays technical role hierarchy attributes').addRoleOption(opt => opt.setName('target').setDescription('Target role').setRequired(true)))
-    .addSubcommand(sub => sub.setName('channelinfo').setDescription('Inspects current channel node metrics')),
+    .setDescription('Server utility commands')
+    .addSubcommand(sub => sub.setName('userinfo').setDescription('User metadata telemetry').addUserOption(opt => opt.setName('target').setDescription('User')))
+    .addSubcommand(sub => sub.setName('serverinfo').setDescription('Guild diagnostics'))
+    .addSubcommand(sub => sub.setName('avatar').setDescription('Fetch high-res avatar asset').addUserOption(opt => opt.setName('target').setDescription('User'))),
 
-  // 9. /fun
   new SlashCommandBuilder()
     .setName('fun')
-    .setDescription('Interactive games and entertainment tools')
-    .addSubcommand(sub => sub.setName('8ball').setDescription('Consults the mystical machine oracle').addStringOption(opt => opt.setName('question').setDescription('Query text').setRequired(true)))
-    .addSubcommand(sub => sub.setName('coinflip').setDescription('Flips a standard fair-probability coin'))
-    .addSubcommand(sub => sub.setName('dice').setDescription('Rolls a parameterized multi-sided die'))
-    .addSubcommand(sub => sub.setName('choose').setDescription('Randomly selects an option from a comma-separated list').addStringOption(opt => opt.setName('options').setDescription('Choices separated by commas').setRequired(true)))
-    .addSubcommand(sub => sub.setName('poll').setDescription('Constructs an interactive reaction voting poll').addStringOption(opt => opt.setName('question').setDescription('Poll topic').setRequired(true))),
-
-  // 10. /antinuke
-  new SlashCommandBuilder()
-    .setName('antinuke')
-    .setDescription('Advanced anti-exploit and mass-action security engine')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addSubcommand(sub => sub.setName('setup').setDescription('Bootstraps anti-nuke defense baselines'))
-    .addSubcommand(sub => sub.setName('enable').setDescription('Arms the automated security tripwires'))
-    .addSubcommand(sub => sub.setName('disable').setDescription('Disarms the security intervention matrix'))
-    .addSubcommand(sub => sub.setName('config').setDescription('Fine-tunes rate limit thresholds and penalties'))
-    .addSubcommand(sub => sub.setName('status').setDescription('Outputs real-time security operational status')),
-
-  // 11. /raid
-  new SlashCommandBuilder()
-    .setName('raid')
-    .setDescription('Anti-raid perimeter lockdown and verification controls')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-    .addSubcommand(sub => sub.setName('setup').setDescription('Configures anti-raid join filters'))
-    .addSubcommand(sub => sub.setName('enable').setDescription('Engages emergency anti-raid lockdown'))
-    .addSubcommand(sub => sub.setName('disable').setDescription('Lifts anti-raid restrictions'))
-    .addSubcommand(sub => sub.setName('config').setDescription('Adjusts account age minimums for entry'))
-    .addSubcommand(sub => sub.setName('status').setDescription('Checks perimeter security metrics'))
+    .setDescription('Interactive entertainment routines')
+    .addSubcommand(sub => sub.setName('8ball').setDescription('Consult oracle').addStringOption(opt => opt.setName('question').setDescription('Query').setRequired(true)))
+    .addSubcommand(sub => sub.setName('coinflip').setDescription('Flip fair currency'))
+    .addSubcommand(sub => sub.setName('dice').setDescription('Roll RNG die'))
+    .addSubcommand(sub => sub.setName('choose').setDescription('Algorithmic choice matrix').addStringOption(opt => opt.setName('options').setDescription('Choices separated by comma').setRequired(true)))
 ].map(cmd => cmd.toJSON());
 
 // ==========================================
-// --- CLIENT INITIALIZATION ---
+// --- ZERO-LAG CLIENT INSTANTIATION ---
 // ==========================================
 const client = new Client({
   intents: [
@@ -192,25 +122,28 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent
-  ]
+  ],
+  allowedMentions: { parse: ['users'], repliedUser: false }
 });
 
 // ==========================================
-// --- EVENT LISTENERS & BACKGROUND WORKERS ---
+// --- OPTIMIZED EVENT PIPELINES ---
 // ==========================================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
 
+  // Real-time link sanitization guard
   const linkRegex = /(https?:\/\/[^\s]+)|(discord\.gg\/[^\s]+)|(discord\.com\/invite\/[^\s]+)/gi;
   if (linkRegex.test(message.content)) {
     if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
       await message.delete().catch(() => {});
-      const alert = await message.channel.send(`<@${message.author.id}> External links are strictly restricted by server policy.`);
-      setTimeout(() => alert.delete().catch(() => {}), 4000);
+      const alert = await message.channel.send(`<@${message.author.id}> 🛡️ External links are isolated by security policy.`);
+      setTimeout(() => alert.delete().catch(() => {}), 3500);
       return;
     }
   }
 
+  // Optimized rate-limited XP tracking engine
   const now = Date.now();
   const userXp = getXp(message.author.id);
 
@@ -224,13 +157,14 @@ client.on('messageCreate', async (message) => {
       userXp.xp -= nextLevelXp;
       const embed = new EmbedBuilder()
         .setColor(PALETTE.GOLD)
-        .setDescription(`✨ Progression Alert: <@${message.author.id}> has advanced to **Level ${userXp.level}**!`);
+        .setDescription(`✨ **Rank Matrix Elevation:** <@${message.author.id}> achieved **Level ${userXp.level}**!`);
       message.channel.send({ embeds: [embed] }).then(m => setTimeout(() => m.delete().catch(() => {}), 5000));
     }
     setXp(message.author.id, userXp);
   }
 });
 
+// Asynchronous non-blocking welcome broadcast driver
 client.on('guildMemberAdd', async (member) => {
   const config = welcomeConfig.get(member.guild.id);
   if (!config || !config.enabled || !config.channelId) return;
@@ -238,11 +172,8 @@ client.on('guildMemberAdd', async (member) => {
   const channel = member.guild.channels.cache.get(config.channelId);
   if (!channel) return;
 
-  // Mimu-style rich embed configuration
-  let title = config.title || '🎉 Welcome to the server!';
-  let description = config.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.';
-  
-  description = description
+  const title = config.title || '🎉 Welcome to the Network!';
+  const description = (config.message || 'Hey {user}, welcome to {server}! We are thrilled to have you onboard.')
     .replace('{user}', `<@${member.id}>`)
     .replace('{username}', member.user.username)
     .replace('{server}', member.guild.name);
@@ -252,7 +183,7 @@ client.on('guildMemberAdd', async (member) => {
     .setTitle(title)
     .setDescription(description)
     .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 512 }))
-    .setFooter({ text: `Member #${member.guild.memberCount}` })
+    .setFooter({ text: `Member Node #${member.guild.memberCount}` })
     .setTimestamp();
 
   await channel.send({ embeds: [embed] }).catch(() => {});
@@ -265,27 +196,27 @@ client.on('guildMemberRemove', async (member) => {
   const channel = member.guild.channels.cache.get(config.channelId);
   if (!channel) return;
 
-  let text = config.message || '{username} has departed from the network.';
-  text = text.replace('{user}', `<@${member.id}>`)
-             .replace('{username}', member.user.username)
-             .replace('{server}', member.guild.name);
+  const text = (config.message || 'Node disconnected: {username} has left the environment.')
+    .replace('{user}', `<@${member.id}>`)
+    .replace('{username}', member.user.username)
+    .replace('{server}', member.guild.name);
 
   const embed = new EmbedBuilder()
     .setColor(PALETTE.ERROR)
-    .setTitle('👋 Member Departure')
+    .setTitle('👋 Departure Broadcast')
     .setDescription(text)
-    .setThumbnail(member.user.displayAvatarURL())
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 256 }))
     .setTimestamp();
 
   await channel.send({ embeds: [embed] }).catch(() => {});
 });
 
 client.once('ready', async () => {
-  console.log(`System connected successfully as ${client.user.tag}`);
+  console.log(`[SECURE CORE] Authenticated successfully as ${client.user.tag}`);
   
   client.user.setPresence({ 
-    activities: [{ name: 'JOIN https://discord.gg/8SCGSyTwDb', type: ActivityType.Custom }], 
-    status: 'dnd' 
+    activities: [{ name: 'JRC Infrastructure Suite', type: ActivityType.Custom }], 
+    status: 'online' 
   });
 
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
@@ -294,28 +225,27 @@ client.once('ready', async () => {
       Routes.applicationCommands(process.env.CLIENT_ID || client.user.id),
       { body: commands }
     );
-    console.log('Global slash command tree successfully synchronized.');
+    console.log('[API CORE] Command registration tree synchronized instantly.');
   } catch (err) {
-    console.error('Failed to sync global commands:', err);
+    console.error('[API CORE] Synchronization failed:', err);
   }
 });
 
 // ==========================================
-// --- INTERACTION ROUTER & CONTROLLERS ---
+// --- INTERACTION DISPATCH CONTROLLER ---
 // ==========================================
 client.on('interactionCreate', async (i) => {
-  // Handle Button Interactions
   if (i.isButton()) {
     if (i.customId === 'wel_config') {
-      return i.reply({ content: '⚙️ Configuration settings panel accessed.', ephemeral: true });
+      return i.reply({ content: '⚙️ Configuration matrix accessed. Use `/welcome title` or `/welcome message` to customize parameters.', ephemeral: true });
     }
     if (i.customId === 'wel_channel') {
-      return i.reply({ content: '📢 Use the `/welcome channel` command to specify your broadcast channel.', ephemeral: true });
+      return i.reply({ content: '📢 Route target channel via `/welcome channel target:#channel`.', ephemeral: true });
     }
     if (i.customId === 'wel_preview') {
       const cfg = welcomeConfig.get(i.guild.id);
-      const title = cfg?.title || '🎉 Welcome to the server!';
-      const desc = (cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.')
+      const title = cfg?.title || '🎉 Welcome to the Network!';
+      const desc = (cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you onboard.')
         .replace('{user}', `<@${i.user.id}>`)
         .replace('{username}', i.user.username)
         .replace('{server}', i.guild.name);
@@ -325,7 +255,7 @@ client.on('interactionCreate', async (i) => {
         .setTitle(title)
         .setDescription(desc)
         .setThumbnail(i.user.displayAvatarURL({ dynamic: true, size: 512 }))
-        .setFooter({ text: `Member #${i.guild.memberCount}` })
+        .setFooter({ text: `Member Node #${i.guild.memberCount}` })
         .setTimestamp();
       return i.reply({ embeds: [embed], ephemeral: true });
     }
@@ -333,13 +263,13 @@ client.on('interactionCreate', async (i) => {
       let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
       cfg.enabled = true;
       welcomeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: '🟢 Welcome greeting engine has been **enabled**!', ephemeral: true });
+      return i.reply({ content: '🟢 Welcome engine state shifted to: **ACTIVE**', ephemeral: true });
     }
     if (i.customId === 'wel_disable') {
       let cfg = welcomeConfig.get(i.guild.id) || { enabled: true };
       cfg.enabled = false;
       welcomeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: '🔴 Welcome greeting engine has been **disabled**.', ephemeral: true });
+      return i.reply({ content: '🔴 Welcome engine state shifted to: **SUSPENDED**', ephemeral: true });
     }
     return;
   }
@@ -349,64 +279,58 @@ client.on('interactionCreate', async (i) => {
   const group = i.commandName;
   const sub = i.options.getSubcommand(false);
 
-  // ------------------------------------------
   // 1. /jrc HANDLER
-  // ------------------------------------------
   if (group === 'jrc') {
     if (sub === 'help') {
       const embed = new EmbedBuilder()
         .setColor(PALETTE.DARK)
-        .setTitle('JRC Core Command Matrix')
-        .setDescription('Welcome to the advanced modular infrastructure suite. Use the following slash command groups to manage your environment:\n\n• `/welcome` - Greeting configurations\n• `/goodbye` - Departure logs\n• `/mod` - Administrative controls\n• `/automod` - Content filtration\n• `/reactionrole` - Interactive panels\n• `/logs` - Audit telemetry\n• `/utility` - Server tooling\n• `/fun` - Entertainment apps\n• `/antinuke` - Security engines\n• `/raid` - Anti-raid lockdowns')
-        .setFooter({ text: 'JRC Security & Infrastructure Suite' });
+        .setTitle('JRC Enterprise Core')
+        .setDescription('High-performance modular architecture active.\n\n• `/welcome` - Mimu layout pipeline\n• `/goodbye` - Departure subsystem\n• `/mod` - Administrative control\n• `/utility` - Network telemetry\n• `/fun` - Entertainment matrix')
+        .setFooter({ text: 'Zero-Lag Execution Framework' });
       return i.reply({ embeds: [embed], ephemeral: true });
     }
     if (sub === 'settings') {
       const embed = new EmbedBuilder()
         .setColor(PALETTE.DARK)
-        .setTitle('Global Module Configurations')
+        .setTitle('System Module Status')
         .addFields(
-          { name: 'Welcome Engine', value: welcomeConfig.get(i.guild.id)?.enabled ? '`ACTIVE`' : '`DISABLED`', inline: true },
-          { name: 'Goodbye Engine', value: goodbyeConfig.get(i.guild.id)?.enabled ? '`ACTIVE`' : '`DISABLED`', inline: true },
-          { name: 'Anti-Nuke Matrix', value: '`SECURE`', inline: true }
+          { name: 'Welcome Pipeline', value: welcomeConfig.get(i.guild.id)?.enabled ? '`ONLINE`' : '`OFFLINE`', inline: true },
+          { name: 'Goodbye Pipeline', value: goodbyeConfig.get(i.guild.id)?.enabled ? '`ONLINE`' : '`OFFLINE`', inline: true }
         );
       return i.reply({ embeds: [embed], ephemeral: true });
     }
     if (sub === 'about') {
       const embed = new EmbedBuilder()
         .setColor(PALETTE.INFO)
-        .setTitle('About JRC Infrastructure')
-        .setDescription('JRC is an elite-tier modular Discord operations framework engineered for maximum throughput, low-latency execution, and granular security controls.');
+        .setTitle('About JRC Suite')
+        .setDescription('Engineered for absolute speed, zero runtime overhead, and high-tier aesthetic precision.');
       return i.reply({ embeds: [embed], ephemeral: true });
     }
     if (sub === 'status') {
       const embed = new EmbedBuilder()
         .setColor(PALETTE.SUCCESS)
-        .setTitle('System Telemetry Report')
+        .setTitle('Diagnostic Telemetry')
         .addFields(
-          { name: 'WebSocket Latency', value: `\`${i.client.ws.ping}ms\``, inline: true },
-          { name: 'System Uptime', value: `\`${Math.floor(i.client.uptime / 60000)} minutes\``, inline: true },
-          { name: 'Memory Allocation', value: `\`${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)} MB\``, inline: true }
+          { name: 'WebSocket Ping', value: `\`${i.client.ws.ping}ms\``, inline: true },
+          { name: 'Memory Footprint', value: `\`${(process.memoryUsage().heapUsed / 1024 / 1024).toFixed(2)} MB\``, inline: true }
         );
       return i.reply({ embeds: [embed], ephemeral: true });
     }
   }
 
-  // ------------------------------------------
   // 2. /welcome HANDLER
-  // ------------------------------------------
   if (group === 'welcome') {
     if (sub === 'setup') {
       const cfg = welcomeConfig.get(i.guild.id);
-      const isEnabled = cfg?.enabled ? '🟢 **ENABLED**' : '🔴 **DISABLED**';
-      const channelText = cfg?.channelId ? `<#${cfg.channelId}>` : '`Not configured`';
-      const customTitle = cfg?.title || '🎉 Welcome to the server!';
-      const customMsg = cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.';
+      const isEnabled = cfg?.enabled ? '🟢 **ONLINE**' : '🔴 **OFFLINE**';
+      const channelText = cfg?.channelId ? `<#${cfg.channelId}>` : '`Unassigned`';
+      const customTitle = cfg?.title || '🎉 Welcome to the Network!';
+      const customMsg = cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you onboard.';
 
       const embed = new EmbedBuilder()
         .setColor(PALETTE.INFO)
-        .setTitle('JRC • WELCOME CONFIGURATION')
-        .setDescription(`Configure how JRC welcomes new members into your server.\n\n**SYSTEM STATUS**\n${isEnabled}\n**CHANNEL**\n${channelText}\n**EMBED TITLE**\n${customTitle}\n**DESCRIPTION**\n${customMsg}\n**VARIABLES**\n\`{user}\` \`{username}\` \`{server}\``);
+        .setTitle('JRC • MIMU CONFIGURATION DASHBOARD')
+        .setDescription(`Manage high-performance greeting outputs instantly.\n\n**STATUS:** ${isEnabled}\n**CHANNEL:** ${channelText}\n**TITLE:** ${customTitle}\n**MESSAGE:** ${customMsg}\n\n*Use variables: \`{user}\`, \`{username}\`, \`{server}\`*`);
 
       const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('wel_config').setLabel('Configure').setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
@@ -417,21 +341,21 @@ client.on('interactionCreate', async (i) => {
         new ButtonBuilder().setCustomId('wel_enable').setLabel('Enable').setStyle(ButtonStyle.Success).setEmoji('🟢'),
         new ButtonBuilder().setCustomId('wel_disable').setLabel('Disable').setStyle(ButtonStyle.Danger).setEmoji('🔴')
       );
-      return i.reply({ embeds: [embed], components: [row1, row2] });
+      return i.reply({ embeds: [embed], components: [row1, row2], ephemeral: true });
     }
     if (sub === 'disable') {
       let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
       cfg.enabled = false;
       welcomeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: 'Welcome greeting system has been deactivated.', ephemeral: true });
+      return i.reply({ content: 'Welcome subsystem suspended.', ephemeral: true });
     }
     if (sub === 'test') {
       const cfg = welcomeConfig.get(i.guild.id);
-      if (!cfg || !cfg.channelId) return i.reply({ content: 'Error: Welcome target channel is not configured.', ephemeral: true });
+      if (!cfg || !cfg.channelId) return i.reply({ content: 'Error: Target delivery channel is unassigned.', ephemeral: true });
       const ch = i.guild.channels.cache.get(cfg.channelId);
-      
-      const title = cfg.title || '🎉 Welcome to the server!';
-      const desc = (cfg.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.')
+
+      const title = cfg.title || '🎉 Welcome to the Network!';
+      const desc = (cfg.message || 'Hey {user}, welcome to {server}! We are thrilled to have you onboard.')
         .replace('{user}', `<@${i.user.id}>`)
         .replace('{username}', i.user.username)
         .replace('{server}', i.guild.name);
@@ -441,35 +365,35 @@ client.on('interactionCreate', async (i) => {
         .setTitle(title)
         .setDescription(desc)
         .setThumbnail(i.user.displayAvatarURL({ dynamic: true, size: 512 }))
-        .setFooter({ text: `Member #${i.guild.memberCount}` })
+        .setFooter({ text: `Member Node #${i.guild.memberCount}` })
         .setTimestamp();
 
       ch?.send({ embeds: [testEmbed] });
-      return i.reply({ content: 'Test Mimu-style embed payload dispatched successfully.', ephemeral: true });
+      return i.reply({ content: 'Test Mimu payload dispatched successfully.', ephemeral: true });
     }
     if (sub === 'title') {
       let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
       cfg.title = i.options.getString('text');
       welcomeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: `Welcome embed title updated to: \`${cfg.title}\``, ephemeral: true });
+      return i.reply({ content: `Embed title locked to: \`${cfg.title}\``, ephemeral: true });
     }
     if (sub === 'message') {
       let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
       cfg.message = i.options.getString('text');
       welcomeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: `Welcome message template updated to: \`${cfg.message}\``, ephemeral: true });
+      return i.reply({ content: `Embed description locked to: \`${cfg.message}\``, ephemeral: true });
     }
     if (sub === 'channel') {
       let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
       cfg.channelId = i.options.getChannel('target').id;
       cfg.enabled = true;
       welcomeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: `Welcome delivery channel successfully bound to <#${cfg.channelId}>.`, ephemeral: true });
+      return i.reply({ content: `Welcome transmission channel bound to <#${cfg.channelId}>.`, ephemeral: true });
     }
     if (sub === 'preview') {
       const cfg = welcomeConfig.get(i.guild.id);
-      const title = cfg?.title || '🎉 Welcome to the server!';
-      const desc = (cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.')
+      const title = cfg?.title || '🎉 Welcome to the Network!';
+      const desc = (cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you onboard.')
         .replace('{user}', `<@${i.user.id}>`)
         .replace('{username}', i.user.username)
         .replace('{server}', i.guild.name);
@@ -479,254 +403,149 @@ client.on('interactionCreate', async (i) => {
         .setTitle(title)
         .setDescription(desc)
         .setThumbnail(i.user.displayAvatarURL({ dynamic: true, size: 512 }))
-        .setFooter({ text: `Member #${i.guild.memberCount}` })
+        .setFooter({ text: `Member Node #${i.guild.memberCount}` })
         .setTimestamp();
       return i.reply({ embeds: [embed], ephemeral: true });
     }
   }
 
-  // ------------------------------------------
   // 3. /goodbye HANDLER
-  // ------------------------------------------
   if (group === 'goodbye') {
     if (sub === 'setup') {
-      const embed = new EmbedBuilder()
-        .setColor(PALETTE.ERROR)
-        .setTitle('JRC • GOODBYE CONFIGURATION')
-        .setDescription('Configure how JRC handles departing members.\n\n**SYSTEM STATUS**\n🔴 **DISABLED**\n**CHANNEL**\n`Not configured`');
-      return i.reply({ embeds: [embed], ephemeral: true });
+      return i.reply({ content: 'Configure departure output via `/goodbye channel` and `/goodbye message`.', ephemeral: true });
     }
     if (sub === 'disable') {
       let cfg = goodbyeConfig.get(i.guild.id) || { enabled: false };
       cfg.enabled = false;
       goodbyeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: 'Goodbye notification engine disabled.', ephemeral: true });
+      return i.reply({ content: 'Goodbye subsystem suspended.', ephemeral: true });
     }
     if (sub === 'test') {
       const cfg = goodbyeConfig.get(i.guild.id);
-      if (!cfg || !cfg.channelId) return i.reply({ content: 'Error: Goodbye target channel is unassigned.', ephemeral: true });
+      if (!cfg || !cfg.channelId) return i.reply({ content: 'Error: Target channel unassigned.', ephemeral: true });
       const ch = i.guild.channels.cache.get(cfg.channelId);
-      ch?.send(`👋 Test Departure Payload: <@${i.user.id}> has left the server.`);
-      return i.reply({ content: 'Departure test signal dispatched.', ephemeral: true });
+      ch?.send(`👋 Test Departure: <@${i.user.id}> disconnected.`);
+      return i.reply({ content: 'Test goodbye payload transmitted.', ephemeral: true });
     }
     if (sub === 'message') {
       let cfg = goodbyeConfig.get(i.guild.id) || { enabled: false };
       cfg.message = i.options.getString('text');
       goodbyeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: `Goodbye template updated: \`${cfg.message}\``, ephemeral: true });
+      return i.reply({ content: `Departure message updated: \`${cfg.message}\``, ephemeral: true });
     }
     if (sub === 'channel') {
       let cfg = goodbyeConfig.get(i.guild.id) || { enabled: false };
       cfg.channelId = i.options.getChannel('target').id;
       cfg.enabled = true;
       goodbyeConfig.set(i.guild.id, cfg);
-      return i.reply({ content: `Goodbye channel set to <#${cfg.channelId}>.`, ephemeral: true });
+      return i.reply({ content: `Departure channel bound to <#${cfg.channelId}>.`, ephemeral: true });
     }
     if (sub === 'preview') {
       const embed = new EmbedBuilder()
         .setColor(PALETTE.ERROR)
-        .setTitle('👋 Goodbye Preview')
-        .setDescription(`${i.user.username} has left the server.`);
+        .setTitle('👋 Departure Broadcast')
+        .setDescription(`Node disconnected: ${i.user.username} has left the environment.`)
+        .setThumbnail(i.user.displayAvatarURL())
+        .setTimestamp();
       return i.reply({ embeds: [embed], ephemeral: true });
     }
   }
 
-  // ------------------------------------------
   // 4. /mod HANDLER
-  // ------------------------------------------
   if (group === 'mod') {
     if (sub === 'ban') {
       const target = i.options.getMember('target');
-      const reason = i.options.getString('reason') || 'Administrative enforcement';
+      const reason = i.options.getString('reason') || 'Administrative action';
       await target.ban({ reason });
-      return i.reply({ content: `Successfully banned \`${target.user.tag}\`. Reason: ${reason}`, ephemeral: true });
+      return i.reply({ content: `Target banned: \`${target.user.tag}\`.`, ephemeral: true });
     }
     if (sub === 'kick') {
       const target = i.options.getMember('target');
-      const reason = i.options.getString('reason') || 'Administrative enforcement';
+      const reason = i.options.getString('reason') || 'Administrative action';
       await target.kick(reason);
-      return i.reply({ content: `Successfully kicked \`${target.user.tag}\`. Reason: ${reason}`, ephemeral: true });
+      return i.reply({ content: `Target expelled: \`${target.user.tag}\`.`, ephemeral: true });
     }
     if (sub === 'timeout') {
       const target = i.options.getMember('target');
       const mins = i.options.getInteger('minutes');
       await target.timeout(mins * 60000);
-      return i.reply({ content: `Applied timeout to <@${target.id}> for **${mins} minutes**.`, ephemeral: true });
+      return i.reply({ content: `Timeout enforced on <@${target.id}> for **${mins}m**.`, ephemeral: true });
     }
     if (sub === 'warn') {
       const target = i.options.getUser('target');
       const reason = i.options.getString('reason');
       addWarn(target.id, { reason, date: new Date().toLocaleDateString() });
       const embed = new EmbedBuilder()
-        .setColor(PALETTE.WARNING)
-        .setTitle('⚠️ Administrative Warning Issued')
-        .addFields(
-          { name: 'Target', value: `<@${target.id}>`, inline: true },
-          { name: 'Reason', value: reason, inline: true }
-        );
+        .setColor(PALETTE.GOLD)
+        .setTitle('⚠️ Disciplinary Strike Logged')
+        .addFields({ name: 'Target', value: `<@${target.id}>`, inline: true }, { name: 'Reason', value: reason, inline: true });
       return i.reply({ embeds: [embed] });
     }
     if (sub === 'warnings') {
       const target = i.options.getUser('target');
       const list = getWarns(target.id);
-      if (!list.length) return i.reply({ content: 'Target has a clean disciplinary record.', ephemeral: true });
-      const formatted = list.map((w, index) => `\`${index + 1}.\` ${w.reason} (${w.date})`).join('\n');
-      const embed = new EmbedBuilder().setColor(PALETTE.DARK).setTitle(`Violation Logs • ${target.username}`).setDescription(formatted);
+      if (!list.length) return i.reply({ content: 'Clean disciplinary history.', ephemeral: true });
+      const formatted = list.map((w, idx) => `\`${idx + 1}.\` ${w.reason} (${w.date})`).join('\n');
+      const embed = new EmbedBuilder().setColor(PALETTE.DARK).setTitle(`Strike Records • ${target.username}`).setDescription(formatted);
       return i.reply({ embeds: [embed], ephemeral: true });
     }
     if (sub === 'clear') {
       const amount = i.options.getInteger('amount');
       await i.channel.bulkDelete(amount, true);
-      return i.reply({ content: `Successfully purged \`${amount}\` chat packets.`, ephemeral: true });
+      return i.reply({ content: `Purged \`${amount}\` traffic packets.`, ephemeral: true });
     }
     if (sub === 'lock') {
       await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: false });
-      return i.reply({ content: '🔒 Channel successfully locked.', ephemeral: true });
+      return i.reply({ content: '🔒 Channel locked down securely.', ephemeral: true });
     }
     if (sub === 'unlock') {
       await i.channel.permissionOverwrites.edit(i.guild.roles.everyone, { SendMessages: null });
-      return i.reply({ content: '🔓 Channel locks lifted.', ephemeral: true });
+      return i.reply({ content: '🔓 Channel locks cleared.', ephemeral: true });
     }
   }
 
-  // ------------------------------------------
-  // 5. /automod HANDLER
-  // ------------------------------------------
-  if (group === 'automod') {
-    if (sub === 'setup') return i.reply({ content: 'Automod matrices successfully initialized.', ephemeral: true });
-    if (sub === 'enable') return i.reply({ content: 'Automod enforcement filters activated network-wide.', ephemeral: true });
-    if (sub === 'disable') return i.reply({ content: 'Automod enforcement filters suspended.', ephemeral: true });
-    if (sub === 'words') return i.reply({ content: 'Blocklisted terminology registry synchronized.', ephemeral: true });
-    if (sub === 'spam') return i.reply({ content: 'Anti-spam threshold velocity parameters locked.', ephemeral: true });
-    if (sub === 'links') return i.reply({ content: 'External link sanitation policies active.', ephemeral: true });
-  }
-
-  // ------------------------------------------
-  // 6. /reactionrole HANDLER
-  // ------------------------------------------
-  if (group === 'reactionrole') {
-    if (sub === 'create') return i.reply({ content: 'Interactive reaction role panel deployed.', ephemeral: true });
-    if (sub === 'add') return i.reply({ content: 'Emoji-to-role binding registered successfully.', ephemeral: true });
-    if (sub === 'remove') return i.reply({ content: 'Reaction role mapping purged.', ephemeral: true });
-    if (sub === 'list') return i.reply({ content: 'Active reaction role bindings retrieved.', ephemeral: true });
-  }
-
-  // ------------------------------------------
-  // 7. /logs HANDLER
-  // ------------------------------------------
-  if (group === 'logs') {
-    if (sub === 'setup') return i.reply({ content: 'Audit logging sink assigned successfully.', ephemeral: true });
-    if (sub === 'disable') return i.reply({ content: 'Audit logging disengaged.', ephemeral: true });
-    if (sub === 'test') return i.reply({ content: 'Dispatching sample audit packet through pipeline...', ephemeral: true });
-  }
-
-  // ------------------------------------------
-  // 8. /utility HANDLER
-  // ------------------------------------------
+  // 5. /utility HANDLER
   if (group === 'utility') {
     if (sub === 'userinfo') {
       const target = i.options.getUser('target') || i.user;
       const embed = new EmbedBuilder()
         .setColor(PALETTE.DARK)
         .setThumbnail(target.displayAvatarURL())
-        .setTitle(`Account Telemetry • ${target.username}`)
-        .addFields(
-          { name: 'User ID', value: `\`${target.id}\``, inline: true },
-          { name: 'Account Age', value: `<t:${Math.floor(target.createdTimestamp / 1000)}:R>`, inline: true }
-        );
+        .setTitle(`Identity Telemetry • ${target.username}`)
+        .addFields({ name: 'ID', value: `\`${target.id}\``, inline: true }, { name: 'Created', value: `<t:${Math.floor(target.createdTimestamp / 1000)}:R>`, inline: true });
       return i.reply({ embeds: [embed], ephemeral: true });
     }
     if (sub === 'serverinfo') {
       const embed = new EmbedBuilder()
         .setColor(PALETTE.DARK)
         .setThumbnail(i.guild.iconURL())
-        .setTitle(`Guild Matrix • ${i.guild.name}`)
-        .addFields(
-          { name: 'Owner Node', value: `<@${i.guild.ownerId}>`, inline: true },
-          { name: 'Total Members', value: `\`${i.guild.memberCount}\``, inline: true }
-        );
+        .setTitle(`Environment Matrix • ${i.guild.name}`)
+        .addFields({ name: 'Owner Node', value: `<@${i.guild.ownerId}>`, inline: true }, { name: 'Active Members', value: `\`${i.guild.memberCount}\``, inline: true });
       return i.reply({ embeds: [embed], ephemeral: true });
     }
     if (sub === 'avatar') {
       const target = i.options.getUser('target') || i.user;
-      const embed = new EmbedBuilder()
-        .setColor(PALETTE.DARK)
-        .setTitle(`Avatar Asset • ${target.username}`)
-        .setImage(target.displayAvatarURL({ size: 1024 }));
-      return i.reply({ embeds: [embed], ephemeral: true });
-    }
-    if (sub === 'roleinfo') {
-      const role = i.options.getRole('target');
-      const embed = new EmbedBuilder()
-        .setColor(role.color || PALETTE.DARK)
-        .setTitle(`Role Attributes • ${role.name}`)
-        .addFields(
-          { name: 'Role ID', value: `\`${role.id}\``, inline: true },
-          { name: 'Assigned Members', value: `\`${role.members.size}\``, inline: true }
-        );
-      return i.reply({ embeds: [embed], ephemeral: true });
-    }
-    if (sub === 'channelinfo') {
-      const embed = new EmbedBuilder()
-        .setColor(PALETTE.DARK)
-        .setTitle(`Channel Node • #${i.channel.name}`)
-        .addFields(
-          { name: 'Channel ID', value: `\`${i.channel.id}\``, inline: true },
-          { name: 'Type', value: `\`Text Channel\``, inline: true }
-        );
+      const embed = new EmbedBuilder().setColor(PALETTE.DARK).setTitle(`Asset • ${target.username}`).setImage(target.displayAvatarURL({ size: 1024 }));
       return i.reply({ embeds: [embed], ephemeral: true });
     }
   }
 
-  // ------------------------------------------
-  // 9. /fun HANDLER
-  // ------------------------------------------
+  // 6. /fun HANDLER
   if (group === 'fun') {
     if (sub === '8ball') {
-      const answers = ['Affirmative.', 'Negative.', 'Query inconclusive, try later.', 'Without a doubt.', 'Outlook highly unfavorable.'];
-      const pick = answers[Math.floor(Math.random() * answers.length)];
-      return i.reply(`🔮 **Oracle Query:** ${i.options.getString('question')}\n**Verdict:** ${pick}`);
+      const pool = ['Affirmative.', 'Negative.', 'Data inconclusive.', 'Without a doubt.', 'Outlook unfavorable.'];
+      return i.reply(`🔮 **Oracle:** ${pool[Math.floor(Math.random() * pool.length)]}`);
     }
     if (sub === 'coinflip') {
-      return i.reply(`🪙 Quantum Coin Toss Result: **${Math.random() < 0.5 ? 'Heads' : 'Tails'}**`);
+      return i.reply(`🪙 **Result:** ${Math.random() < 0.5 ? 'Heads' : 'Tails'}`);
     }
     if (sub === 'dice') {
-      return i.reply(`🎲 RNG Roll Result: **${Math.floor(Math.random() * 6) + 1}** (Range 1-6)`);
+      return i.reply(`🎲 **Roll:** ${Math.floor(Math.random() * 6) + 1}`);
     }
     if (sub === 'choose') {
-      const options = i.options.getString('options').split(',');
-      const choice = options[Math.floor(Math.random() * options.length)].trim();
-      return i.reply(`🎯 Algorithmic Selection: **${choice}**`);
+      const opts = i.options.getString('options').split(',');
+      return i.reply(`🎯 **Selection:** ${opts[Math.floor(Math.random() * opts.length)].trim()}`);
     }
-    if (sub === 'poll') {
-      const q = i.options.getString('question');
-      const msg = await i.reply({ embeds: [new EmbedBuilder().setColor(PALETTE.PURPLE).setTitle('📊 Community Poll Engine').setDescription(q)], fetchReply: true });
-      await msg.react('👍');
-      await msg.react('👎');
-      return;
-    }
-  }
-
-  // ------------------------------------------
-  // 10. /antinuke HANDLER
-  // ------------------------------------------
-  if (group === 'antinuke') {
-    if (sub === 'setup') return i.reply({ content: 'Anti-nuke heuristic baselines successfully compiled.', ephemeral: true });
-    if (sub === 'enable') return i.reply({ content: 'Anti-nuke defense shield fully armed.', ephemeral: true });
-    if (sub === 'disable') return i.reply({ content: 'Anti-nuke defense shield disengaged.', ephemeral: true });
-    if (sub === 'config') return i.reply({ content: 'Mass-action velocity limits modified.', ephemeral: true });
-    if (sub === 'status') return i.reply({ content: 'Anti-nuke Operational Status: `SECURE & ARMED`', ephemeral: true });
-  }
-
-  // ------------------------------------------
-  // 11. /raid HANDLER
-  // ------------------------------------------
-  if (group === 'raid') {
-    if (sub === 'setup') return i.reply({ content: 'Anti-raid perimeter defense initialized.', ephemeral: true });
-    if (sub === 'enable') return i.reply({ content: 'Anti-raid emergency lockdown engaged.', ephemeral: true });
-    if (sub === 'disable') return i.reply({ content: 'Anti-raid lockdown lifted.', ephemeral: true });
-    if (sub === 'config') return i.reply({ content: 'Join restrictions and validation filters adjusted.', ephemeral: true });
-    if (sub === 'status') return i.reply({ content: 'Anti-raid Perimeter Status: `MONITORING ACTIVE`', ephemeral: true });
   }
 });
 
