@@ -887,7 +887,12 @@ commands.push(
             .setDescription("Question")
             .setRequired(true)
         )
-);
+      )
+    )
+        .toJSON())
+
+
+
 
 commands.push(
   new SlashCommandBuilder()
