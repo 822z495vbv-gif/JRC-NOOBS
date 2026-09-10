@@ -77,6 +77,7 @@ const commands = [
     .addSubcommand(sub => sub.setName('setup').setDescription('Setup interactive welcome configuration dashboard'))
     .addSubcommand(sub => sub.setName('disable').setDescription('Completely deactivates the welcome greeting engine'))
     .addSubcommand(sub => sub.setName('test').setDescription('Dispatches a test welcome message to the designated channel'))
+    .addSubcommand(sub => sub.setName('title').setDescription('Customizes the Mimu-style embed title').addStringOption(opt => opt.setName('text').setDescription('Embed title text').setRequired(true)))
     .addSubcommand(sub => sub.setName('message').setDescription('Customizes the textual payload for incoming members').addStringOption(opt => opt.setName('text').setDescription('Message layout text content').setRequired(true)))
     .addSubcommand(sub => sub.setName('channel').setDescription('Designates the output channel for welcome cards').addChannelOption(opt => opt.setName('target').setDescription('Target text channel').setRequired(true)))
     .addSubcommand(sub => sub.setName('preview').setDescription('Renders a visual preview of the currently configured welcome embed')),
@@ -237,16 +238,21 @@ client.on('guildMemberAdd', async (member) => {
   const channel = member.guild.channels.cache.get(config.channelId);
   if (!channel) return;
 
-  let text = config.message || 'Welcome {user} to {server}!';
-  text = text.replace('{user}', `<@${member.id}>`)
-             .replace('{username}', member.user.username)
-             .replace('{server}', member.guild.name);
+  // Mimu-style rich embed configuration
+  let title = config.title || '🎉 Welcome to the server!';
+  let description = config.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.';
+  
+  description = description
+    .replace('{user}', `<@${member.id}>`)
+    .replace('{username}', member.user.username)
+    .replace('{server}', member.guild.name);
 
   const embed = new EmbedBuilder()
     .setColor(PALETTE.INFO)
-    .setTitle('🎉 New Member Arrival')
-    .setDescription(text)
-    .setThumbnail(member.user.displayAvatarURL())
+    .setTitle(title)
+    .setDescription(description)
+    .setThumbnail(member.user.displayAvatarURL({ dynamic: true, size: 512 }))
+    .setFooter({ text: `Member #${member.guild.memberCount}` })
     .setTimestamp();
 
   await channel.send({ embeds: [embed] }).catch(() => {});
@@ -307,10 +313,20 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ content: '📢 Use the `/welcome channel` command to specify your broadcast channel.', ephemeral: true });
     }
     if (i.customId === 'wel_preview') {
+      const cfg = welcomeConfig.get(i.guild.id);
+      const title = cfg?.title || '🎉 Welcome to the server!';
+      const desc = (cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.')
+        .replace('{user}', `<@${i.user.id}>`)
+        .replace('{username}', i.user.username)
+        .replace('{server}', i.guild.name);
+
       const embed = new EmbedBuilder()
         .setColor(PALETTE.INFO)
-        .setTitle('🎉 Welcome Preview')
-        .setDescription(`Welcome <@${i.user.id}> to ${i.guild.name}!`);
+        .setTitle(title)
+        .setDescription(desc)
+        .setThumbnail(i.user.displayAvatarURL({ dynamic: true, size: 512 }))
+        .setFooter({ text: `Member #${i.guild.memberCount}` })
+        .setTimestamp();
       return i.reply({ embeds: [embed], ephemeral: true });
     }
     if (i.customId === 'wel_enable') {
@@ -381,10 +397,16 @@ client.on('interactionCreate', async (i) => {
   // ------------------------------------------
   if (group === 'welcome') {
     if (sub === 'setup') {
+      const cfg = welcomeConfig.get(i.guild.id);
+      const isEnabled = cfg?.enabled ? '🟢 **ENABLED**' : '🔴 **DISABLED**';
+      const channelText = cfg?.channelId ? `<#${cfg.channelId}>` : '`Not configured`';
+      const customTitle = cfg?.title || '🎉 Welcome to the server!';
+      const customMsg = cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.';
+
       const embed = new EmbedBuilder()
         .setColor(PALETTE.INFO)
         .setTitle('JRC • WELCOME CONFIGURATION')
-        .setDescription('Configure how JRC welcomes new members into your server.\n\n**SYSTEM STATUS**\n🔴 **DISABLED**\n**CHANNEL**\n`Not configured`\n**EMBED COLOR**\n`#5865F2`\n**GREETING / TITLE**\n🎉 Welcome {user}!\n**DESCRIPTION**\nWe\'re glad to have you here. Enjoy your stay!\n**VARIABLES**\n`{user}` `{username}` `{server}`');
+        .setDescription(`Configure how JRC welcomes new members into your server.\n\n**SYSTEM STATUS**\n${isEnabled}\n**CHANNEL**\n${channelText}\n**EMBED TITLE**\n${customTitle}\n**DESCRIPTION**\n${customMsg}\n**VARIABLES**\n\`{user}\` \`{username}\` \`{server}\``);
 
       const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('wel_config').setLabel('Configure').setStyle(ButtonStyle.Secondary).setEmoji('⚙️'),
@@ -407,8 +429,29 @@ client.on('interactionCreate', async (i) => {
       const cfg = welcomeConfig.get(i.guild.id);
       if (!cfg || !cfg.channelId) return i.reply({ content: 'Error: Welcome target channel is not configured.', ephemeral: true });
       const ch = i.guild.channels.cache.get(cfg.channelId);
-      ch?.send(`🎉 Test Payload: Welcome <@${i.user.id}> to ${i.guild.name}!`);
-      return i.reply({ content: 'Test packet dispatched successfully.', ephemeral: true });
+      
+      const title = cfg.title || '🎉 Welcome to the server!';
+      const desc = (cfg.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.')
+        .replace('{user}', `<@${i.user.id}>`)
+        .replace('{username}', i.user.username)
+        .replace('{server}', i.guild.name);
+
+      const testEmbed = new EmbedBuilder()
+        .setColor(PALETTE.INFO)
+        .setTitle(title)
+        .setDescription(desc)
+        .setThumbnail(i.user.displayAvatarURL({ dynamic: true, size: 512 }))
+        .setFooter({ text: `Member #${i.guild.memberCount}` })
+        .setTimestamp();
+
+      ch?.send({ embeds: [testEmbed] });
+      return i.reply({ content: 'Test Mimu-style embed payload dispatched successfully.', ephemeral: true });
+    }
+    if (sub === 'title') {
+      let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
+      cfg.title = i.options.getString('text');
+      welcomeConfig.set(i.guild.id, cfg);
+      return i.reply({ content: `Welcome embed title updated to: \`${cfg.title}\``, ephemeral: true });
     }
     if (sub === 'message') {
       let cfg = welcomeConfig.get(i.guild.id) || { enabled: false };
@@ -424,10 +467,20 @@ client.on('interactionCreate', async (i) => {
       return i.reply({ content: `Welcome delivery channel successfully bound to <#${cfg.channelId}>.`, ephemeral: true });
     }
     if (sub === 'preview') {
+      const cfg = welcomeConfig.get(i.guild.id);
+      const title = cfg?.title || '🎉 Welcome to the server!';
+      const desc = (cfg?.message || 'Hey {user}, welcome to {server}! We are thrilled to have you here.')
+        .replace('{user}', `<@${i.user.id}>`)
+        .replace('{username}', i.user.username)
+        .replace('{server}', i.guild.name);
+
       const embed = new EmbedBuilder()
         .setColor(PALETTE.INFO)
-        .setTitle('🎉 Welcome Preview')
-        .setDescription(`Welcome <@${i.user.id}> to ${i.guild.name}!`);
+        .setTitle(title)
+        .setDescription(desc)
+        .setThumbnail(i.user.displayAvatarURL({ dynamic: true, size: 512 }))
+        .setFooter({ text: `Member #${i.guild.memberCount}` })
+        .setTimestamp();
       return i.reply({ embeds: [embed], ephemeral: true });
     }
   }
@@ -678,5 +731,3 @@ client.on('interactionCreate', async (i) => {
 });
 
 client.login(process.env.DISCORD_TOKEN);
-
-
