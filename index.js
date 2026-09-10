@@ -840,7 +840,7 @@ commands.push(
           o.setName("channel").setDescription("Channel")
         )
     )
-);
+
 
 commands.push
   new SlashCommandBuilder()
